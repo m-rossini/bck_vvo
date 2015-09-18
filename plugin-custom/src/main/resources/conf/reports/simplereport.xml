@@ -1,0 +1,51 @@
+<?xml version="1.0" ?>
+<report-configuration name="SimpleReportForRequestId">
+   <report-query>
+        SELECT c.consequence_type as type, c.triggered_rule as rule, c.consequence_label as label, 
+               c.account_number, c.cycle_code, c.cycle_start, c.cycle_end, c.element_type, c.tag_key as tag, 
+               coalesce(d.total_amnt, i.total_amnt, 0.0) as di_total_amount, 
+               coalesce(double_value, 0.0) as correct_value, 
+               d.service_id as d_service_id, service_plan, channel_id, called_number, call_datetime, duration_type, 
+               duration_unit, f.access_number as fu_access_number, f.freeunits_id as fu_id, 
+               f.service_name as fu_service_name, f.included_units as fu_included_units,  
+               f.used_units as fu_used_units, f.checked_used_units as fu_checked_units, 
+               bc.ocr_right_line as bc_right_code, bc.alpha_barcode as bc_alpha_code, 
+               sd.caption as sd_caption, sd.start_date as sd_start_dt, sd.end_date as sd_end_dt, 
+               sd.total_amnt as sd_total_amt, rp.carrier_code as rp_carrier_code, 
+	           coalesce(rp.carrier_name, '') as rp_carrier_name, rp.carrier_state as rp_carrier_state,
+		       rp.total_amnt as rp_total_amnt, rp.receipt_class as rp_receipt_class, 
+	           rp.receipt_number as rp_receipt_number, rp.receipt_subclass as rp_receipt_subclass,
+			   rd.fiscal_code as rd_fiscal_code, rd.sequence_number as rd_sequence_number, 
+	           rd.service_id as rd_service_id, rd.total_amnt as rd_total_amnt, rd.unit_count as rd_unit_count,
+			   rd.unit_type as rd_unit_type, rd.caption as rd_caption, s.string_value as s_string_value,
+			   fc.fiscal_code as fc_fiscal_code, fc.code_description as fc_code_description
+          FROM bck_consequence c 
+          LEFT OUTER JOIN bck_related_om r ON r.consequence_id=c.uid 
+          LEFT OUTER JOIN inv_usage_detail d ON d.uid=r.om_uid 
+          LEFT OUTER JOIN inv_invoice i ON i.uid=r.om_uid 
+          LEFT OUTER JOIN inv_barcode bc ON bc.uid=r.om_uid 
+          LEFT OUTER JOIN inv_service_detail sd ON sd.uid=r.om_uid 
+          LEFT OUTER JOIN inv_receipt rp ON rp.uid=r.om_uid 
+          LEFT OUTER JOIN inv_receipt_detail rd ON rd.uid=r.om_uid 
+          LEFT OUTER JOIN bck_consequence_attr a ON a.consequence_id=c.uid 
+          LEFT OUTER JOIN bck_consequence_double x ON x.uid=a.attr_uid 
+          LEFT OUTER JOIN bck_consequence_string s ON s.uid=a.attr_uid 
+          LEFT OUTER JOIN bck_consequence_freeunits f ON f.uid=a.attr_uid 
+          LEFT OUTER JOIN bck_unauthorized_fiscalcode fc ON fc.uid=a.attr_uid 
+         WHERE c.consequence_type in ('IncorrectTotalAmount', 'InvalidBarCode',
+               'InvalidReceiptHeaderInfo','InvalidReceiptDetailInfo','UnknownFiscalOPCodeInReceiptDetail',
+   	           'IncorrectSubscriptionCharge', 'IncorrectSubscriptionPeriod', 'SubscriptionFeeZeroed',
+	           'NegotiatedSubscriptionFee') 
+           AND c.external_id = $P{PARAM_REQUEST_ID} 
+           AND c.account_state = $P{PARAM_ACCT_STATE}
+         ORDER BY c.cycle_code,  c.account_number, c.triggered_rule, c.consequence_type, 
+                  c.consequence_label, call_datetime 
+   </report-query>
+   <images>
+       <image name="APPLICATION_LOGO" path="jasper/img/bc_logo.png"/>
+       <image name="COMPANY_LOGO"     path="jasper/img/auster_logo.png"/>
+       <image name="CUSTOMER_LOGO"    path="jasper/img/vivo_logo.png"/>
+   </images>
+   <virtualizer enabled="true" threshold="5000"/>
+</report-configuration>
+

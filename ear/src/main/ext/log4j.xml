@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
+
+<!-- ===================================================================== -->
+<!--                                                                       -->
+<!--  Log4j Configuration                                                  -->
+<!--                                                                       -->
+<!-- ===================================================================== -->
+
+<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/" debug="false">
+
+   <!-- ================================= -->
+   <!-- Preserve messages in a local file -->
+   <!-- ================================= -->
+
+   <!-- A time/date based rolling appender -->
+		<appender name="FILE" class="biz.minaret.log4j.DatedFileAppender">
+			<param name="Threshold" value="DEBUG" />
+			<param name="Directory" value="logs" />
+			<param name="Prefix" value="server-" />
+			<param name="Suffix" value=".log" />
+			<param name="Append" value="false" />
+			<layout class="org.apache.log4j.PatternLayout">
+				<param name="ConversionPattern" value="%d{ABSOLUTE} %-5p [%c{1}] %m%n" />
+			</layout>
+		</appender>
+
+   <!-- ============================== -->
+   <!-- Append messages to the console -->
+   <!-- ============================== -->
+
+   <appender name="CONSOLE" class="org.apache.log4j.ConsoleAppender">
+      <param name="Target" value="System.out"/>
+      <param name="Threshold" value="ERROR"/>
+      <layout class="org.apache.log4j.PatternLayout">
+         <param name="ConversionPattern" value="%d{ABSOLUTE} %m%n"/>
+      </layout>
+   </appender>
+
+
+   <!-- ================ -->
+   <!-- Limit categories -->
+   <!-- ================ -->
+
+   <category name="org.apache">
+      <priority value="WARN"/>
+   </category>
+
+
+   <!-- ======================= -->
+   <!-- Setup the Root category -->
+   <!-- ======================= -->
+
+   <root>
+      <priority value="INFO"/>
+      <appender-ref ref="FILE"/>
+      <appender-ref ref="CONSOLE"/>
+   </root>
+
+</log4j:configuration>

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project name="billcheckout-vivo" default="import-files">
+	<property environment="env"/>
+	<!--  The classpath   -->
+	<path id="classpath.base">
+		<fileset dir="${basedir}/lib" includes="*"/>
+		<pathelement location="${env.ANT_HOME}/lib/ant.jar"/>
+		<pathelement location="${basedir}/conf"/>
+	</path>
+	<!--  Import files   -->
+	<target name="import-files">
+		<tstamp prefix="start">
+			<format property="TIMESTAMP" pattern="dd/MM/yyyy hh:mm:ss.SSS"/>
+			<format property="DSTAMP" pattern="yyyy-MM-dd"/>
+		</tstamp>
+		<echo message="Current Timestamp: ${start.TIMESTAMP}"/>
+		<echo message="Importing input files - please wait..."/>
+		<java classname="br.com.auster.vivo.billcheckout.ServicePriceImportMain"
+			classpathref="classpath.base" resultproperty="java.result" fork="true"
+			maxmemory="1500M" dir="${basedir}">
+			<jvmarg value="-server"/>
+			<jvmarg value="-Xms800M"/>
+			<sysproperty key="java.endorsed.dirs"
+				value="${basedir}/lib/endorsed"/>
+			<sysproperty key="user.language" value="pt"/>
+			<sysproperty key="user.country" value="BR"/>
+			<sysproperty key="jdbc.drivers"
+				value="org.apache.commons.dbcp.PoolingDriver:oracle.jdbc.driver.OracleDriver"/>
+			<sysproperty key="import.useImportId" value="${import.useImportId}"/>
+			<arg value="-c"/>
+			<arg value="${config.file}"/>
+			<arg value="-u"/>
+			<arg value="${config.descriptionFile}"/>
+			<arg value="-f"/>
+			<arg value="${input.file}"/>
+			<arg value="-e"/>
+			<arg value="${effective.date}"/>
+			<arg value="-p"/>
+			<arg
+				value="br.com.auster.vivo.billcheckout.pricing.SQLPricingFacadeImpl"/>
+			<arg value="-r"/>
+			<arg value="conf/import/pricing-sql-configuration.xml"/>
+			<arg line="-s false"/>
+			<arg value="${cmdline.opts}"/>
+		</java>
+		<echo message="Done!"/>
+		<tstamp prefix="end">
+			<format property="TIMESTAMP" pattern="dd/MM/yyyy hh:mm:ss.SSS"/>
+		</tstamp>
+		<echo message="Current Timestamp: ${end.TIMESTAMP}"/>
+	</target>
+</project>

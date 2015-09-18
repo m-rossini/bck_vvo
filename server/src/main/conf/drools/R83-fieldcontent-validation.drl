@@ -1,0 +1,328 @@
+package br.com.auster.rules.vivo.R83;
+
+import java.util.List;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+
+import br.com.auster.common.rules.GlobalForLog;
+
+import br.com.auster.common.lang.NamedHashMap;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.ReceiptDetail;
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.om.invoice.SectionDetail;
+import br.com.auster.om.util.UnitCounter;
+import br.com.auster.om.util.UnitConvertor;
+
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+import br.com.auster.vivo.billcheckout.util.DimensionCache
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.common.text.DurationFormat;
+import br.com.auster.common.text.DateFormat;
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+
+
+function void buildR83Consequence01(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 String ruleNbr, String desc, UsageDetail usg) {
+		 
+    consequenceBuilder.setRule(ruleNbr, "Informações Incompletas");
+    consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+    consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+    consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+    consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+    consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(usg.getCarrierCode()));
+
+    TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+    c.setDescription(desc);	
+    c.addAttribute("Ciclo", usg.getInvoice().getCycleCode());
+    c.addAttribute("NomeDoServico",usg.getSvcPlan());
+    c.addAttribute("Terminal", usg.getChannelId());
+    c.addAttribute("Subscrição", usg.getSection().getSubscriptionid());
+	c.addAttribute("Seção", usg.getSection().getSectionName());
+    c.addAttribute("Data", DateFormat.formatDate(usg.getDatetime(), "dd/MM/yy"));
+    c.addAttribute("Hora", DurationFormat.formatFromDate(usg.getDatetime()));
+    c.addAttribute("Origem Chamada", usg.getOriginCity());
+    c.addAttribute("Número Chamado", ValueFormat.formatPhone(usg.getCalledNumber()));
+    c.addAttribute("Destino Chamado", usg.getDestinationCity());
+    c.addAttribute("Estado Origem", usg.getOriginState());
+    c.addAttribute("Estado Destino", usg.getDestinationState());
+    c.addAttribute("Duração", DurationFormat.formatFromMinute(usg.getOriginalUsageDuration()));
+    c.addAttribute("Valor", ValueFormat.formatValue(usg.getTotalAmount()));
+    c.addAttribute("Tarifa", usg.getTariffClass());
+    c.addAttribute("Classe", usg.getCallClass());
+    c.addAttribute("Subclasse", usg.getCallSubclass());
+    results.add(c);
+    
+}
+
+#
+# Regra 83 - Validação de Conteúdo de Campos do Arquivo
+#
+
+rule "Regra 83-1"
+	when
+		$detail :  UsageDetail(originalDatetimeEmpty==true ,
+							   callClass != ChecklistClasses.CALL_CLASS_3RD_PARTY ,
+							   objectType != "A") 
+	then
+		buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-01", "Data da Chamada faltando", $detail);
+end
+
+rule "Regra 83-2"
+	when
+		$detail : UsageDetail(destinationCityEmpty==true ,
+							  callSubclass != ChecklistClasses.CALL_SUBCLASS_555 ,	
+							  callSubclass != ChecklistClasses.CALL_SUBCLASS_1234 ,
+							  callSubclass != ChecklistClasses.CALL_SUBCLASS_PORTALVOZ ,
+							  callSubclass != ChecklistClasses.CALL_SUBCLASS_VIVOINFORMA,
+							  callClass != ChecklistClasses.CALL_CLASS_3RD_PARTY ,
+						  	  callClass != ChecklistClasses.CALL_CLASS_ROI,	
+							  callClass != ChecklistClasses.CALL_CLASS_INT,
+							  callClass != ChecklistClasses.CALL_CLASS_INTC,
+							  callClass != ChecklistClasses.CALL_CLASS_INTR,					
+							  callClass != ChecklistClasses.CALL_CLASS_AD1,
+							  callClass != ChecklistClasses.CALL_CLASS_AD2,
+							  callClass != ChecklistClasses.CALL_CLASS_AD3,
+							  callClass != ChecklistClasses.CALL_CLASS_WAP,
+							  callClass != ChecklistClasses.CALL_CLASS_VAS,	
+							  callClass != ChecklistClasses.CALL_CLASS_ATEND,										 
+							  objectType != "A" ) 
+	then	
+		buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-02", "Destino da Chamada faltando", $detail);
+end
+
+rule "Regra 83-3"
+	when
+		$detail : UsageDetail( 
+			calledNumberEmpty == true , 		
+			callClass != ChecklistClasses.CALL_CLASS_3RD_PARTY ,
+			caption != "INTBRASDIRETO",
+			objectType != "A" ) 
+	then
+		   if (
+	       !(($detail.getElementType().equals("ROAM_MOC_LOCAL_DETAIL") ||
+	        $detail.getElementType().equals("ROAM_MTC_LOCAL_DETAIL")  ||
+	        $detail.getElementType().equals("ROAM_MOC_LD_DETAIL") 	     || 
+	        $detail.getElementType().equals("ROAM_MTC_LD_DETAIL"))        
+	         && ($detail.getCaption().equals("ADICIONAL")))	       
+	        )  {
+	  
+				buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-03", "Número Chamado faltando", $detail);
+		}
+end
+
+rule "Regra 83-4"
+	when
+		$detail : UsageDetail(originCityEmpty == true , 
+							  objectType != "A",		 
+							  callClass != ChecklistClasses.CALL_CLASS_3RD_PARTY ,	
+							  callSubclass != ChecklistClasses.CALL_SUBCLASS_555 ,	
+							  callSubclass != ChecklistClasses.CALL_SUBCLASS_1234 ,		
+							  elementType != "TonesAndImagesDetail",
+							  elementType != "GamesAndApplicationsDetail",
+							  elementType != "WAPDetail",
+							  elementType != "PlayDetail",
+							  elementType != "ZAPDetail",
+							  elementType != "SMS_DETAIL" )
+	then
+		buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-04", "Origem da Chamada faltando.", $detail);
+end
+
+rule "Regra 83-5"
+	when
+		$detail : UsageDetail(channelIdEmpty == true,		
+							  callClass != ChecklistClasses.CALL_CLASS_3RD_PARTY ,
+							  objectType != "A" ) 
+	then
+		buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-05", "Número de Origem da Chamada faltando", $detail);
+end
+
+rule "Regra 83-6"
+	when
+		$detail : UsageDetail(tariffEmpty == true,		
+							  callClass != ChecklistClasses.CALL_CLASS_3RD_PARTY ,
+							  callClass != ChecklistClasses.CALL_CLASS_ROI ,	
+							  callClass != ChecklistClasses.CALL_CLASS_VAS ,	
+							  objectType != "A",
+							  elementType != "ROAM_MOC_LOCAL_DETAIL",
+			                  elementType != "ROAM_MTC_LOCAL_DETAIL",
+			                  elementType != "ROAM_MOC_LD_DETAIL",				
+							  elementType != "ROAM_MTC_LD_DETAIL" )
+	then
+		buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-06", "Tarifa da Chamada faltando", $detail);
+end
+
+rule "Regra 83-7"
+	when
+		$detail : UsageDetail(originalUsageDurationEmpty == true ,
+							  callClass != ChecklistClasses.CALL_CLASS_3RD_PARTY ,
+							  objectType != "A" ) 
+	then
+		buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-07", "Duração da Chamada faltando", $detail);
+end
+
+rule "Regra 83-8"
+	when
+		$detail : UsageDetail(originalTotalAmountEmpty == true, 
+							  callClass != ChecklistClasses.CALL_CLASS_3RD_PARTY ,
+							  objectType != "A" ) 
+	then
+		buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-08", "Valor Cobrado da Chamada faltando", $detail);
+end
+
+rule "Regra 83-9"
+	when
+		$detail : UsageDetail(svcPlanEmpty == true , 
+							  callClass != ChecklistClasses.CALL_CLASS_3RD_PARTY ,
+							  objectType != "A" ) 
+	then
+		buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-09", "Serviço da Chamada faltando", $detail);
+end
+
+rule "Regra 83-10"
+	when
+		$detail : UsageDetail(destinationStateEmpty == true,  
+							  groupId != "Serviços",		
+							  callSubclass != ChecklistClasses.CALL_SUBCLASS_VC1SPV,
+							  callSubclass != ChecklistClasses.CALL_SUBCLASS_555 ,	
+							  callSubclass != ChecklistClasses.CALL_SUBCLASS_1234 ,
+							  callSubclass != ChecklistClasses.CALL_SUBCLASS_VIVOINFORMA,
+							  callClass != ChecklistClasses.CALL_CLASS_1xRTT ,	
+							  callClass != ChecklistClasses.CALL_CLASS_SPECIAL ,		
+							  callClass != ChecklistClasses.CALL_CLASS_VOX ,		
+							  callClass != ChecklistClasses.CALL_CLASS_VAS ,		
+							  callClass != ChecklistClasses.CALL_CLASS_ATEND ,		
+							  callClass != ChecklistClasses.CALL_CLASS_3RD_PARTY ,
+							  callClass != ChecklistClasses.CALL_CLASS_ROI,	
+							  callClass != ChecklistClasses.CALL_CLASS_INT,
+							  callClass != ChecklistClasses.CALL_CLASS_INTC,
+							  callClass != ChecklistClasses.CALL_CLASS_INTR,																	
+							  callClass != ChecklistClasses.CALL_CLASS_AD3,	
+							  callClass != ChecklistClasses.CALL_CLASS_VC1SPV,																			
+							  callClass != ChecklistClasses.CALL_CLASS_FRANQUIA,									
+							  objectType != "A",
+							  elementType != "TonesAndImagesDetail",
+							  elementType != "GamesAndApplicationsDetail",
+							  elementType != "WAPDetail",
+							  elementType != "PlayDetail",
+							  elementType != "ZAPDetail")
+	then
+		buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-10", "Estado de Destino faltando", $detail);
+end
+
+rule "Regra 83-11"
+	when
+		$detail : UsageDetail(originStateEmpty == true ,
+							  groupId != "Serviços",		 
+							  callClass != ChecklistClasses.CALL_CLASS_3RD_PARTY ,
+							  callClass != ChecklistClasses.CALL_CLASS_ROI,
+							  callClass != ChecklistClasses.CALL_CLASS_INT,
+							  callClass != ChecklistClasses.CALL_CLASS_INTC,
+							  callClass != ChecklistClasses.CALL_CLASS_INTR,		
+							  callClass != ChecklistClasses.CALL_CLASS_VC1SPV,							
+							  callSubclass != ChecklistClasses.CALL_SUBCLASS_VC1SPV,											
+							  caption != "INTBRASDIRETO",								
+							  objectType != "A",
+							  elementType  != "TonesAndImagesDetail",
+							  elementType != "GamesAndApplicationsDetail",
+							  elementType != "WAPDetail",
+							  elementType != "PlayDetail",
+							  elementType != "ZAPDetail",
+							  elementType != "SMS_DETAIL")
+	then
+		buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-11", "Estado de Origem faltando", $detail);
+end
+
+rule "Regra 83-12"
+	when
+		$detail : UsageDetail (elementType == "LOCAL_CALLS_DETAIL" || == "LOCAL_COLLECT_CALLS_DETAIL" 
+							   || == "LD_INTRASTATE_CALLS_DETAIL" || == "LD_INTERSTATE_CALLS_DETAIL"
+							   || == "COLLECT_CALLS_DETAIL" || == "ROAM_MOC_LOCAL_DETAIL"
+							   || == "ROAM_MTC_LOCAL_DETAIL" || == "ROAM_MOC_LD_DETAIL"
+							   || == "ROAM_MTC_LD_DETAIL" || == "PARTY_3RD_DETAIL",
+							   callClass != ChecklistClasses.CALL_CLASS_VAS,
+							   callClass != ChecklistClasses.CALL_CLASS_AGGREGATE,
+							   callClass != ChecklistClasses.CALL_CLASS_ATEND,
+							   callSubclass != ChecklistClasses.CALL_SUBCLASS_555,
+							   callSubclass != ChecklistClasses.CALL_SUBCLASS_1234,
+							   callSubclass != ChecklistClasses.CALL_SUBCLASS_PORTALVOZ,
+							   callSubclass != ChecklistClasses.CALL_SUBCLASS_VIVOINFORMA,
+							   callSubclass != ChecklistClasses.CALL_SUBCLASS_0500,
+							   callSubclass != ChecklistClasses.CALL_SUBCLASS_7000,
+							   destinationCity != "CAIXA POSTAL" && != "Caixa Postal" && 
+							  				   != "VIVO INFORMA" && != "Vivo Informa" &&
+							  				   != "PORTAL VOZ" && != "Portal Voz",
+							   $calledNumber : calledNumber,
+							   $channelId : channelId ) 
+	then	
+		int calledLen = $calledNumber.length();
+		int channelLen = $channelId.length();		
+
+	   if (
+	       !(($detail.getElementType().equals("ROAM_MOC_LOCAL_DETAIL") ||
+	        $detail.getElementType().equals("ROAM_MTC_LOCAL_DETAIL")  ||
+	        $detail.getElementType().equals("ROAM_MOC_LD_DETAIL") 	     || 
+	        $detail.getElementType().equals("ROAM_MTC_LD_DETAIL"))        
+	         && ($detail.getCaption().equals("ADICIONAL")))	       
+	        )  {
+
+				if (!$calledNumber.startsWith("0300") && calledLen != 10) {
+					buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-13", "Número Chamado com tamanho diferente de 10", $detail);
+				}
+				if ($calledNumber.startsWith("0300") && calledLen != 11 ) {
+					buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-12", "Número 0300 com tamanho diferente de 11", $detail);
+				}
+			if (channelLen != 10) {
+					buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-14", "Número do Terminal com tamanho diferente de 10", $detail);
+			}		
+		}
+end
+
+rule "Regra 83-15"
+	when
+		$detail : UsageDetail(captionEmpty == true, 
+							  callClass != ChecklistClasses.CALL_CLASS_3RD_PARTY ,		
+							  objectType != "A" ) 
+	then
+
+		buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-15", "Descrição da Chamada faltando.", $detail);
+end
+
+// Portal de Voz
+rule "Regra 83-16"
+	when
+		$detail : UsageDetail(objectType != "A",
+							  destinationCity == "PORTAL VOZ" || == "Portal Voz") 
+	then
+		if ($detail.getCalledNumber().length() != 5) {
+			buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-16", "Portal de Voz qualificado incorretamente", $detail);
+		}
+end
+
+// Caixa Postal
+rule "Regra 83-17"
+	when
+		$detail : UsageDetail(objectType != "A",
+							  destinationCity == "CAIXA POSTAL" || == "Caixa Postal" || 
+							  				  == "VIVO INFORMA" || == "Vivo Informa") 
+	then
+		if ($detail.getCalledNumber().length() != 4) {
+			buildR83Consequence01(results, dimensionCache, consequenceBuilder, "R83-17", "CaixaPostal/VivoInforma qualificado incorretamente", $detail);
+		}
+end

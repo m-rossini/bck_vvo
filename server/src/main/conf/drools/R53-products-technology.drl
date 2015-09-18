@@ -1,0 +1,111 @@
+#created on: 22/01/2008
+#author anardo
+
+package br.com.auster.rules.vivo.R53
+
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+
+import java.util.List;
+import java.util.Iterator;
+import java.util.ArrayList;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.vivo.billcheckout.cache.vo.DataBarnTechnologyVO;
+import br.com.auster.vivo.billcheckout.caches.R53TechServiceCache;
+
+global java.util.List results;
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.vivo.billcheckout.cache.DataBarnTechnologyServices dataBarnTechServices;
+
+
+function TelcoConsequence buildR53Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 				  String carrier, String ruleNbr, String desc, String terminal, String subscription, String state,
+		 				  String service, String techSubscr, String techService, String ciclo) {
+		 				 
+		//setando parâmetros padrões para a consequência
+		consequenceBuilder.setRule(ruleNbr, "Produtos/Tecnologia de Aparelho"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(carrier));
+		
+		//definindo os atributos que serão gerados na crítica
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription(desc);
+		//atributos para ambas sub-regras
+		c.addAttribute("Terminal", terminal);
+		c.addAttribute("NomeDoServico", service);
+		c.addAttribute("Ciclo", ciclo);
+		c.addAttribute("Subscrição", subscription);
+		c.addAttribute("Sigla Estado", state);
+		c.addAttribute("Tecnologia Subscricao", techSubscr);
+		c.addAttribute("Tecnologia Serviço", techService);
+  		
+  		return c;
+}
+
+#Carrega a subscrição consultada da tabela
+rule "R53-INIT-01"
+salience 90
+	when
+		// Seleciona todas as subscrições
+		$section : Section( tag in ("300D"),
+							$sbscrp   : subscriptionid,     //subscrição
+							$terminal : channelId, 	        //terminal
+							$state    : subscriptionState)  //sigla estado  
+	
+		// Monta a lista de todos os servicos desta subscrição
+		$secList : ArrayList( size > 0 )
+			from collect ( Section (accessNbr  == $terminal, 
+									tag in ("320T","325T","330T"))
+						  )
+	then
+		// Busca tecnologia da subscrição
+		DataBarnTechnologyVO subscrVO = dataBarnTechServices.getTypeTechSubscr("R53_TechSubscription", new Object[] {$sbscrp});
+		
+		// Se tecnologia da subscrição não foi encontrada no DTBN 
+		if (subscrVO == null ) {
+			results.add(buildR53Consequence(dimensionCache,consequenceBuilder, $section.getInvoice().getAccount().getCarrierCode(),
+						"R53-01", "Subscrição não encontrada na tabela",	$terminal, $sbscrp, $state, "", "", "", $section.getInvoice().getCycleCode() ));					
+		}
+		
+		else {
+			Iterator it = $secList.iterator();
+			while (it.hasNext()) {
+				Section sec = (Section) it.next();
+				Iterator itDetail = sec.getDetails().iterator();
+				while (itDetail.hasNext()) {
+					// percorrendo a lista de todos os serviços desta subscrição
+					ServiceDetail detail = (ServiceDetail) itDetail.next();
+					
+					DataBarnTechnologyVO serviceVO = R53TechServiceCache.getTechService(detail.getCaption());
+
+					// Se tecnologia do serviço não foi encontrado no DTBN 
+					if (serviceVO == null){
+						results.add(buildR53Consequence(dimensionCache,consequenceBuilder,detail.getInvoice().getAccount().getCarrierCode(),
+									"R53-02", "Serviço não encontrado na tabela", detail.getSection().getParentSection().getChannelId(),
+									 detail.getSection().getSubscriptionid(), "", detail.getCaption(), "", "", detail.getInvoice().getCycleCode()));		
+					}
+					else {
+						// Verifica se a tecnologia do produto é compativel com a da subscrição
+						if ((serviceVO.getChnlTypeInd() != null) 
+							&& !(serviceVO.getChnlTypeInd().equals(subscrVO.getChnlTypeInd()))) {
+							
+							results.add(buildR53Consequence(dimensionCache, consequenceBuilder, $section.getInvoice().getAccount().getCarrierCode(),
+								"R53-03", "Subscrição com tecnologia de serviço inválida", $terminal, $sbscrp, $section.getSubscriptionState(), serviceVO.getCaptnText(), 
+								subscrVO.getChnlTypeInd(), serviceVO.getChnlTypeInd(), $section.getInvoice().getCycleCode() ));			
+						}
+					}
+				}
+			}		
+		}
+end 

@@ -1,0 +1,48 @@
+package br.com.auster.rules.vivo.R59;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Section;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+ 
+// validar se o estado de habilitação do terminal é o mesmo estado da conta
+rule "Regra 59-1"
+	salience 0 
+	when
+		$account : Account( 
+			$state : accountState 
+		)
+		$section : Section( 
+			elementType == "SUBSCRIPTION_INFO",
+			subscriptionState != $state
+		)
+	then
+		consequenceBuilder.setRule("R59-1", "Estado de Habilitação do Terminal Diverge do Estado da Conta");
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($account.getCarrierCode()));
+
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription("Estado de Habilitação do Terminal Diverge do Estado da Conta");
+		c.addAttribute("Estado Conta", $account.getAccountState());
+		c.addAttribute("Estado Term", $section.getSubscriptionState());		
+		c.addAttribute("Número Term", ValueFormat.formatPhone($section.getAccessNbr()));
+		results.add(c);
+end

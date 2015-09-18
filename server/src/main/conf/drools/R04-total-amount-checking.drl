@@ -1,0 +1,121 @@
+package br.com.auster.rules.vivo.R04;
+
+import java.lang.Math;
+
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.Account;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+
+//###########################################################################
+// RULE #4: valor total da fatura
+//###########################################################################
+
+rule "Regra R04"
+	salience 0
+	when
+		$invoice : Invoice(
+ 			$totalDue : totalAmountDue,
+ 			$totalHeld : heldBillAmount,
+ 			$totalPayments : paymentsAmount,
+ 			$totalAdjustments : adjustmentsAmount,
+ 			$totalRetention : retentionAmount
+		)
+		$sectionsTotal : Number() from accumulate (
+			Section(
+				invoice == $invoice,
+				elementType in (
+					"LOCAL_CALLS_TOTAL",
+					"LOCAL_COLLECT_CALLS_TOTAL",
+					"LD_INTRASTATE_CALLS_TOTAL",
+					"LD_INTERSTATE_CALLS_TOTAL",
+					"COLLECT_CALLS_TOTAL",
+					"INTERNATIONAL_CALLS_TOTAL",
+					"ROAM_MOC_LOCAL_TOTAL",
+					"ROAM_MTC_LOCAL_TOTAL",
+					"ROAM_MOC_LD_TOTAL",
+					"ROAM_MTC_LD_TOTAL",
+					"ROAM_MOC_INTERNATIONAL_TOTAL",
+					"ROAM_MTC_INTERNATIONAL_TOTAL",
+					"VAS_TOTAL",
+					"Calls0500Total",
+					"PARTY_3RD_TOTAL",
+					"SMS_TOTAL",
+					"TonesAndImagesTotal",
+					"GamesAndApplicationsTotal",
+					"WAPTotal",
+					"PlayTotal",
+					"ZAPTotal",
+					"VoiceServicesTotal",
+					"ACTIVATION_TOTAL",
+					"ADDITIONAL_SERVICES_TOTAL",
+					"PROMOTIONS_TOTAL",
+					"REDEBITO_SERVICOS_IMPUGNADOS_TOTAL",
+					"REDEBITO_CHAMADAS_IMPUGNADAS_TOTAL",
+					"REDEBITO_MENSAGENS_IMPUGNADAS_TOTAL",
+					"REDEBITO_DATA_2G_IMPUGNADAS_TOTAL",
+					"MULTAS_JUROS_TOTAL",
+					"DISCOUNT_TOTAL",
+					"DiscountsTotal",
+					"PARCELAMENTO_CONTA_TOTAL",
+					"EQUIPMENT_INSTALLMENT_TOTAL",
+					"SUBSCRIPTION_SRV_CHARGE_TOTAL",
+					"EquipementInstallmentBreakTotal",
+					"DISPUTE_CREDIT_TOTAL"
+				),
+				$value : totalAmount
+			),
+			sum( $value )
+		)
+		$contractCancelTotal : Number() from accumulate (
+			Section(
+				invoice == $invoice,
+				elementType in (
+					"CONTRACT_CANCEL_TOTAL"
+				),
+				$value : totalAmount
+			),
+			sum( $value )
+		)
+		eval(Math.abs($totalDue - $totalHeld - $totalRetention - $totalPayments - $totalAdjustments
+					  - $sectionsTotal.doubleValue() - $contractCancelTotal.doubleValue()) > 0.01)
+ 	then
+		consequenceBuilder.setRule("R04", "Validação das Cobranças no Boleto de Pagamento");
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($invoice.getAccount().getCarrierCode()));
+
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription("Total da Fatura Incorreto");
+
+		c.addAttribute("Demonstrado", ValueFormat.formatValue($totalDue));
+		c.addAttribute("Retido", ValueFormat.formatValue($totalHeld));
+		c.addAttribute("Calculado", ValueFormat.formatValue($sectionsTotal));
+		c.addAttribute("Pagamentos", ValueFormat.formatValue($totalPayments));
+		c.addAttribute("Créditos", ValueFormat.formatValue($invoice.getDisputeCredits()));
+		c.addAttribute("Parc. Equip.", ValueFormat.formatValue($invoice.getEqpInstmtAmount()));
+		c.addAttribute("Juros", ValueFormat.formatValue($invoice.getInterestsAmount()));
+		c.addAttribute("Multas", ValueFormat.formatValue($invoice.getPenaltiesAmount()));
+		c.addAttribute("Ajustes", ValueFormat.formatValue($totalAdjustments));
+		c.addAttribute("Retenção", ValueFormat.formatValue($totalRetention));
+		c.addAttribute("Dev. Multas", ValueFormat.formatValue($invoice.getPenaltiesReturnAmount()));
+		c.addAttribute("Dev. Juros", ValueFormat.formatValue($invoice.getInterestsReturnAmount()));
+		c.addAttribute("Quebra Contrato", ValueFormat.formatValue($contractCancelTotal));
+		c.addAttribute("Parcelamento", ValueFormat.formatValue($invoice.getMonthlyInstmtAmount()));
+		c.addAttribute("Impostos", ValueFormat.formatValue($invoice.getStateTaxAmount()));
+		results.add(c);
+end

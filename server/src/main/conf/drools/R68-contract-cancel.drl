@@ -1,0 +1,295 @@
+package br.com.auster.rules.vivo.R68;
+
+import java.lang.Math;
+import java.util.Iterator;
+import java.util.List;
+
+import br.com.auster.common.rules.GlobalForLog;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.OneTimeEventDetail;
+
+import br.com.auster.om.pricing.TaxCategory;
+import br.com.auster.om.pricing.TaxRate;
+
+import br.com.auster.vivo.billcheckout.cache.vo.ContractBreakPenaltyVO;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoDimensionsFacade;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.cache.DataBarnContractBreakServices dbservicesCB;
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.om.pricing.PricingFacade priceEngine;
+global java.util.List results; 
+
+
+function TelcoConsequence buildR68Consequence(DimensionCache dimensionCache, 
+		TelcoConsequenceBuilder consequenceBuilder, Account account, String ruleNbr, 
+		String desc, String accessNbr, String svcName, Double invoiceAmount, Double dbpenalty, 
+		Double discount, Double basePrice, Long periodDifference, 
+		Double taxRate, Double calculatedPrice) {
+		
+	consequenceBuilder.setRule(ruleNbr,"Multa por Quebra de Contato"); 
+	consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+	consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+	consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+	consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+	consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(account.getCarrierCode()));
+			
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(desc);
+	
+	if (accessNbr == null)
+		c.addNullAttribute("Numero Acesso");
+	else c.addAttribute("Numero Acesso",accessNbr);	
+		
+	if (svcName == null)
+		c.addNullAttribute("NomeDoServico");		
+	else c.addAttribute("NomeDoServico",svcName);
+	
+	if (invoiceAmount == null) 
+		c.addNullAttribute("Multa Fatura");
+	else c.addAttribute("Multa Fatura", ValueFormat.formatValue(invoiceAmount));
+				
+	if (dbpenalty == null)
+		c.addNullAttribute("Preço Negociado");		
+	else c.addAttribute("Preço Negociado", ValueFormat.formatValue(dbpenalty));
+					
+	if (discount == null)
+		c.addNullAttribute("Desconto Negociado");		
+	else c.addAttribute("Desconto Negociado", ValueFormat.formatValue(discount));		
+		
+	if (basePrice == null)
+		c.addNullAttribute("Preço Base");
+	else c.addAttribute("Preço Base", ValueFormat.formatValue(basePrice));
+							
+	if (periodDifference == null)		
+		c.addNullAttribute("Periodos Utilizados");
+	else c.addAttribute("Periodos Utilizados", ValueFormat.formatValue(periodDifference));
+					
+	if (taxRate == null)		
+		c.addNullAttribute("Imposto Utilizado");
+	else c.addAttribute("Imposto Utilizado", ValueFormat.formatValue(taxRate));
+					
+	if (calculatedPrice == null)	
+		c.addNullAttribute("Valor Calculado");
+	else c.addAttribute("Valor Calculado", ValueFormat.formatValue(calculatedPrice));
+	
+    return c;
+}
+
+#
+# Regra 68 – Contract Break Penalty
+#
+rule "Regra 68-INIT" salience 50
+    when
+        $acct : Account( $acctNumber : accountNumber )
+        $inv  : Invoice( 
+        		  account == $acct 
+        		, $cycleCode : cycleCode
+        		, $cycleEnd : originalCycleEndDate 
+        		, $cycleStart : originalCycleStartDate )
+    then
+    	if (dbservicesCB == null) {
+	    	return;
+    	}
+        List penalties = 
+        	dbservicesCB.getPenaltyRecordsFor( "ContractBreakPenalty", 
+        	new Object[] {$acctNumber, $cycleEnd, $cycleStart, $cycleEnd, $cycleEnd, $cycleStart, $cycleEnd, $acctNumber, $cycleEnd, $cycleStart, $cycleEnd, $cycleEnd, $cycleStart} );
+        	Iterator it;
+        for( it = penalties.iterator(); it.hasNext(); ) {
+        	Object obj = it.next();
+            insert( obj );
+        }
+end
+
+#####
+# Execute the validation if the databarn dates are correct
+#
+rule "Regra 68-1"
+	when
+	    $acct    : Account( $acctNumber : accountNumber, $carrierCode : carrierCode )
+	    	    
+	    $vo : ContractBreakPenaltyVO( accountNumber == $acctNumber	    						
+	    						,agreementExpirationDateValid == false
+								,periodQuantity != 0	
+								,$accsNumber : accessNumber								    						
+                              	,$svcName : serviceName
+                              	,$dbpenalty : negotPriceAmt 
+                              	)                              
+	then										
+		results.add(buildR68Consequence(dimensionCache, consequenceBuilder, $acct, "R68-01", 
+										"Datas de Contrato Inválidas no databarn.", $accsNumber,
+										$svcName, null, $dbpenalty, null, null, null, null, null));
+end
+
+#####
+# Execute the validation if the penalty was inserted in
+# the invoice when in the databarn the penalty does not exists.
+#
+rule "Regra 68-2"
+	when
+	    $acct    : Account( $acctNumber : accountNumber, $carrierCode : carrierCode )
+	    
+	    $invoice : Invoice( account == $acct, $cycleStartDate : cycleStartDate )
+	    
+	    $charge  : OneTimeEventDetail( 
+	    	 elementType  == "CONTRACT_CANCEL_DETAIL"
+	    	,invoice == $invoice
+	    	,$accsNumber : accessNumber
+	    	,$svcName : caption
+	    	,$penaltyAmount : totalAmount )
+	                                   
+	    not ContractBreakPenaltyVO( accountNumber == $acctNumber
+	    						, accessNumber == $accsNumber
+	    						, $agrExpDate : agreementExpirationDate -> ( ($agrExpDate == null) || ($agrExpDate.after($cycleStartDate) ))
+								, agreementExpirationDateValid == true
+	                            , captionText == $svcName )
+	then
+		results.add(buildR68Consequence(dimensionCache, consequenceBuilder, $acct, "R68-02", 
+										"Multa cobrada na fatura sem registro no DataBarn.", $accsNumber,
+										null, $penaltyAmount, null, null, null, null, null, null));	
+end
+
+
+#####
+# Execute the validation if the penalty was inserted in
+# the databarn and does not exists in the invoice.
+#
+rule "Regra 68-3"
+	when
+	    $acct    : Account( $acctNumber : accountNumber, $carrierCode : carrierCode )
+	    
+	    $invoice : Invoice( 
+	    				account == $acct, 
+	    				$cycleStartDate : cycleStartDate )
+	    	                                   
+	    $vo : ContractBreakPenaltyVO( 	    						  
+	                              accountNumber == $acctNumber,
+	    						  $accsNumber : accessNumber,
+	    						  $agrExpDate : agreementExpirationDate -> ( ($agrExpDate == null) || ($agrExpDate.after($cycleStartDate) )),
+								  agreementExpirationDateValid == true,
+								  negotiatedToZero == false,
+	                              $svcName : captionText)
+
+	    not  OneTimeEventDetail( 
+	    	 elementType  == "CONTRACT_CANCEL_DETAIL",
+	    	 invoice == $invoice,
+	    	 accessNumber == $accsNumber, 
+	    	 caption == $svcName
+			 )
+		                  
+	then
+		results.add(buildR68Consequence(dimensionCache, consequenceBuilder, $acct, "R68-03", 
+										"Multa cobrada no databarn sem registro na fatura.", $accsNumber,
+										$svcName, null, null, null, null, null, null, null));					
+end
+
+#####
+# Execute the validation in the penalty value
+#
+rule "Regra 68-4"
+	when
+	    $acct    : Account( 
+	    			  $acctNumber : accountNumber
+	    			, $carrierCode : carrierCode 
+	    			, $accountState : accountState
+	    			)
+	    
+	    $invoice : Invoice( 
+	    						$cycleStartDate : cycleStartDate ,
+	    						account == $acct )
+	    
+	    $vo : ContractBreakPenaltyVO( 
+								 agreementExpirationDateValid == true
+								, $calcDiff : agreementDifferenceInMonths != Long.MIN_VALUE
+	    						, agreementExpirationDate != null
+	    						, agreementEffectiveDate != null								
+								, periodEqualsFromCalculations == false
+	    						, accountNumber == $acctNumber	    
+	    						, $pd : periodDifference	                              		    						
+                              	, $svcName : serviceName
+                              	, $dbpenalty : negotPriceAmt	    						
+	                            , $caption : captionText
+	    						, $accsNumber : accessNumber
+	    						, $taxCategory : taxCategoryId	    						                  
+								, $period : periodQuantity
+								, $origin : dataOriging	 
+								, $base : basePriceAmt  
+								, $taxIncluded : taxIncluded 	
+								, $negotType : negotType	
+								, $negotPercent : negotPercent
+								, $agreffdate : agreementEffectiveDate				
+                              	)     
+                              	
+	    $ch :  OneTimeEventDetail( elementType  == "CONTRACT_CANCEL_DETAIL"
+	    						, invoice == $invoice
+	    						, accessNumber == $accsNumber
+								, $invoiceAmount : totalAmount	    						
+	    						, caption == $caption
+	    						, startDate == $agreffdate)                              	                         
+	then
+		double valueOfTaxRate=1;
+		boolean isTaxIncluded=true;
+		if ($taxIncluded != null) {
+			isTaxIncluded = ($taxIncluded.equalsIgnoreCase("Y")) ? true : false;
+		}
+		
+		if (!isTaxIncluded) {
+			if (priceEngine == null) {
+				GlobalForLog.log("WARN", "PriceEngine is not configured for R68 during tax validation.");
+				return;
+			}		
+			TaxCategory taxCategory = priceEngine.getTaxCategory($taxCategory );
+			if (taxCategory == null) {
+				GlobalForLog.log("WARN", "Tax Category not found for ID:" + $taxCategory);
+				return;
+			}		
+			TaxRate taxRate = taxCategory.getTaxRate($accountState, $cycleStartDate);
+			if (taxRate == null) {
+				GlobalForLog.log("WARN", "Tax Rate not found for Tax Category ID:" + $taxCategory);
+				return;		
+			}		
+			valueOfTaxRate = taxRate.getTaxRate();
+		}
+		
+		double basePrice = $base;
+		double discount=0;
+		if ($origin.equalsIgnoreCase("NP")) {
+		//IF diferente from NP, we already have the base price.
+			String nt = ($negotType == null) ? "A" : $negotType;
+			if (nt.equalsIgnoreCase("A")) {
+				basePrice = $dbpenalty;
+				discount=0;
+			} else if (nt.equalsIgnoreCase("D")) {
+				discount=$negotPercent * -1;
+			} else { // nt.equalsIgnoreCase("I")
+				discount=$negotPercent;
+			}
+			discount = discount/100;
+		} 
+
+		double calculatedPrice= ( (basePrice * (double)(1+discount) )  * $pd) * valueOfTaxRate;
+		
+		if (Math.abs( Math.abs(calculatedPrice) - Math.abs($invoiceAmount) ) > 0.01 ) {			
+			results.add(buildR68Consequence(dimensionCache, consequenceBuilder, $acct, "R68-04", 
+										"Multa cobrada com valor calculado diferente ao da fatura.", 
+										$accsNumber, $svcName, $invoiceAmount, $dbpenalty, 
+										discount, basePrice, $pd, valueOfTaxRate, calculatedPrice));
+		}					
+end

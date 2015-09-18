@@ -1,0 +1,175 @@
+#package br.com.auster.rules.vivo;
+
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+import br.com.auster.common.rules.GlobalForLog;
+
+global java.util.List results;
+global br.com.auster.billcheckout.param.SimpleObjectComparation adBagReference;
+global br.com.auster.billcheckout.param.SimpleObjectComparation adBagReferenceAC;
+#
+#  680D - Chamadas Recebidas a Cobrar - Exceto Locais
+#
+
+rule "680D Franquia 555" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "680D",
+                              caption == "GRATIS", 
+			                  objectType != "A",
+                              calledNumber == "*555" || == "555"
+		)
+    then    
+
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_FRANQUIA);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_555);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);
+        $usage.setGuideRule(drools.getRule().getName());       
+        $usage.setCallAsHome();
+        $usage.setCallAsLocal();
+        $usage.setDetailCFOP("1110");
+end
+
+rule "680D 555" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "680D", 
+                              calledNumber == "*555" || == "555",
+			                  objectType != "A",
+                              caption != "GRATIS" )
+    then 
+        $usage.setCallClass(ChecklistClasses.CALL_SUBCLASS_VC1SPV);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_555);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);
+        $usage.setGuideRule(drools.getRule().getName());       
+        $usage.setCallAsHome();
+        $usage.setCallAsLocal();
+        $usage.setDetailCFOP("1110");
+end
+
+rule "680D Franquia 1234" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "680D",
+                              caption == "GRATIS", 
+			                  objectType != "A",
+                              calledNumber == "*1234" 
+		)
+    then    
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_FRANQUIA);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_1234);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);
+        $usage.setGuideRule(drools.getRule().getName());       
+        $usage.setCallAsHome();
+        $usage.setCallAsLocal();
+        $usage.setDetailCFOP("1110");
+end
+
+rule "680D 1234" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "680D", 
+                              calledNumber == "*1234",
+			                  objectType != "A",
+                              caption != "GRATIS")
+    then    
+        $usage.setCallClass(ChecklistClasses.CALL_SUBCLASS_VC1SPV);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_1234);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);
+        $usage.setGuideRule(drools.getRule().getName());       
+        $usage.setCallAsHome();
+        $usage.setCallAsLocal();
+        $usage.setDetailCFOP("1110");
+end
+
+rule "680D Franquia Portal Voz" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "680D",
+                              caption == "GRATIS", 
+			                  objectType != "A",
+                              calledNumber == "*2211" || == "2211" )
+    then   
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_FRANQUIA);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_PORTALVOZ);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setCallAsHome();
+        $usage.setCallAsLocal();  
+        $usage.setDetailCFOP("1110");                  
+end
+
+rule "680D Portal Voz" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "680D",                               
+                              calledNumber == "*2211" || == "2211",
+			                  objectType != "A",
+                              caption != "GRATIS" )
+    then    
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC1SPV);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_PORTALVOZ);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setCallAsHome();
+        $usage.setCallAsLocal(); 
+        $usage.setDetailCFOP("1110");                   
+end
+
+rule "680D Franquia Vivo Informa" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "680D",
+                              caption == "GRATIS", 
+			                  objectType != "A",
+                              calledNumber == "*365" )
+    then   
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_FRANQUIA);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_VIVOINFORMA);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setCallAsHome();
+        $usage.setCallAsLocal();  
+        $usage.setDetailCFOP("1110");                  
+end
+
+rule "680D Vivo Informa" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "680D",                               
+                              calledNumber == "*365",
+			                  objectType != "A",
+                              caption != "GRATIS" )
+    then    
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC1SPV);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_VIVOINFORMA);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setCallAsHome();
+        $usage.setCallAsLocal(); 
+        $usage.setDetailCFOP("1110");                   
+end

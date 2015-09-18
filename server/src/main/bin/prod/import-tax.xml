@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="billcheckout-vivo" default="import-files">
+
+    <property environment="env"/>
+
+    <!-- The classpath -->
+    <path id="classpath.base">
+      <fileset dir="${basedir}/lib" includes="*"/>
+      <pathelement location="${env.ANT_HOME}/lib/ant.jar"/>
+    </path>
+
+    <!-- Import files -->
+    <target name="import-files" >
+      <tstamp prefix="start">
+        <format property="TIMESTAMP" 
+                pattern="dd/MM/yyyy hh:mm:ss.SSS"/>
+        <format property="DSTAMP" pattern="yyyy-MM-dd"/>
+      </tstamp>
+      <echo message="Current Timestamp: ${start.TIMESTAMP}"/>
+      <echo message="Importing input files - please wait..."/>
+      <java classname="br.com.auster.vivo.billcheckout.TaxImportMain" 
+	    classpathref="classpath.base"
+            resultproperty="java.result"
+            fork="true"
+            maxmemory="1024M"
+            dir="${basedir}">
+        <jvmarg value="-server"/>
+        <jvmarg value="-Xms512M"/>
+        <sysproperty key="java.endorsed.dirs" value="${basedir}/lib/endorsed"/>
+        <arg value="-c"/>
+        <arg value="${config.file}"/>
+        <arg value="-u"/>
+        <arg value="${config.descriptionFile}"/>
+        <arg value="-f"/>
+        <arg value="${input.file}"/>
+        <arg value="-p"/>
+        <arg value="br.com.auster.vivo.billcheckout.pricing.SQLPricingFacadeImpl"/>
+        <arg value="-r"/>
+        <arg value="conf/import/pricing-sql-configuration.xml"/>
+        <arg line="-s true"/>
+        <arg value="${cmdline.opts}"/>
+      </java>
+      <echo message="Done!"/>
+      <tstamp prefix="end">
+        <format property="TIMESTAMP" 
+                pattern="dd/MM/yyyy hh:mm:ss.SSS"/>
+      </tstamp>
+      <echo message="Current Timestamp: ${end.TIMESTAMP}"/>
+      <fail message="BILLCHECKOUT failed!! Please see the log files for more information.">
+        <condition>
+          <or>
+            <not>
+              <isset property="java.result"/>
+            </not>
+            <not>
+              <equals arg1="${java.result}" arg2="0"/>
+            </not>
+          </or>
+        </condition>
+      </fail>
+  </target>
+	
+</project>

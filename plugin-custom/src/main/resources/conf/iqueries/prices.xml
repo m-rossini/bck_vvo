@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<view display-name="Tabela de Tarifas" datasource="ds2">
+	<columns>
+		<column name="uid"
+			table="prc_service"		type="long"			
+			visible="false"/>
+		<column name="service_id"
+			table="prc_service_price"      	type="long"			
+			visible="false"/>
+		<column name="service_name"            	display-name="Serviço"
+			table="prc_service"		type="varchar"			
+			visible="true"/>
+		<column name="service_description"      display-name="Descrição do Serviço" 	
+			table="prc_service" 		type="varchar"		
+			visible="true"/>
+		<column name="sp_area_id" 		display-name="CSA" 	
+			table="prc_service_price" 	type="varchar"		
+			visible="true"/>						
+		<column name="effective_date" 		display-name="Data de Efetivação" 	
+			table="prc_service_price" 	type="datetime"		
+			visible="true"/>						
+		<column name="expiration_date" 		display-name="Data de Expiração" 	
+			table="prc_service_price" 	type="datetime"		
+			visible="true"/>						
+		<column name="scenario_id" 		display-name="Svc.Price Seq.Nbr" 	
+			table="prc_service_price" 	type="varchar"		
+			visible="true"/>						
+		<column name="charge_type" 		display-name="Tipo de Cobrança" 	
+			table="prc_service_price" 	type="varchar"		
+			visible="true"/>						
+		<column name="initial_unit_type"	display-name="Unidade (Inicial)" 	
+			table="prc_service_price" 	type="varchar"		
+			visible="true"/>						
+		<column name="initial_unit_qty"	display-name="Qtde. Inicial" 	
+			table="prc_service_price" 	type="long"		
+			visible="true"/>						
+		<column name="initial_unit_value"	display-name="Valor Inicial"
+			table="prc_service_price" 	type="double"		
+			visible="true"/>						
+		<column name="step_unit_type"	display-name="Unidade (Adicional)" 	
+			table="prc_service_price" 	type="varchar"		
+			visible="true"/>						
+		<column name="step_unit_qty"	display-name="Qtde. Adicional" 	
+			table="prc_service_price" 	type="long"		
+			visible="true"/>						
+		<column name="step_unit_value"	display-name="Valor Adicional" 	
+			table="prc_service_price" 	type="double"		
+			visible="true"/>						
+		<column name="negotiable_flag"	display-name="Negociável" 	
+			table="prc_service_price" 	type="char"		
+			visible="true"/>						
+		<column name="custom_1"	display-name="Rate Factor" 	
+			table="prc_service_price" 	type="varchar"		
+			visible="true"/>						
+	</columns>
+	<relations>
+		<relation from-table="prc_service" 			
+				  from-column="uid" 
+				  to-table="prc_service_price" 	
+				  to-column="service_id"/>
+	</relations>
+</view>
+

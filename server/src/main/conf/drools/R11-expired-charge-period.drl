@@ -1,0 +1,103 @@
+package br.com.auster.rules.vivo.R11;
+ 
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.common.text.ValueFormat;
+import br.com.auster.common.text.DurationFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+
+function TelcoConsequence buildR11Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		UsageDetail usage, String code, String description) {
+	consequenceBuilder.setRule(code, "Validade da Chamada Expirada"); 
+	consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+	consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+	consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+	consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+	consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(usage.getInvoice().getAccount().getCarrierCode()));
+
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(description);
+    c.addDateAttribute("Data Chamada", usage.getDatetime(), "dd/MM/yy");
+    c.addAttribute("Hora Chamada", DurationFormat.formatFromDate(usage.getDatetime()));
+	c.addDateAttribute("Data Fim Ciclo", usage.getInvoice().getCycleEndDate(), "dd/MM/yy");                                        
+	c.addAttribute("Operadora", usage.getCarrierCode());	
+	c.addAttribute("Estado", usage.getCarrierState());	
+    c.addAttribute("Classe Chamada", usage.getCallClass());
+	c.addAttribute("Sub Classe Chamada", usage.getCallSubclass());
+	c.addAttribute("Tarifa Chamada", usage.getTariffClass());
+    c.addAttribute("Duração", DurationFormat.formatFromBytes(usage.getUsageDuration().toString()));
+    c.addAttribute("Número Acesso", usage.getChannelId());
+    c.addAttribute("Número Chamado", ValueFormat.formatPhone(usage.getCalledNumber()));
+    return c;
+}
+
+// *************************************************
+// RULE #11-1/2: Verificação da Vigência das Chamadas
+// *************************************************
+
+/*
+  cycle end date is counted toward the 90/150 day limit, 
+  so subtracting 89/149 days respectivelly
+*/
+rule "Regra R11-1"
+	salience 50
+	when
+		$invoice : Invoice( 
+			$endDatetime : cycleEndDate
+		)
+		$usage : UsageDetail(
+			invoice == $invoice, 
+			objectType != "P",
+			callClass not in (
+				ChecklistClasses.CALL_CLASS_INT,
+				ChecklistClasses.CALL_CLASS_INTR,
+				ChecklistClasses.CALL_CLASS_INTC,
+				ChecklistClasses.CALL_CLASS_ROI
+			),
+			$datetime : datetime
+		)
+        eval( (($endDatetime.getTime() - $datetime.getTime()) / 86400000) > 89 )
+	then
+		results.add(buildR11Consequence(dimensionCache, consequenceBuilder, $usage, 
+			"R11-1", "Vigência da Chamada Nacional Expirou" ));
+end
+
+rule "Regra 11-2"
+	salience 50
+	when
+		$invoice : Invoice( 
+			$endDatetime : cycleEndDate
+		)
+		$usage : UsageDetail(
+			invoice == $invoice, 
+			objectType != "P",
+			callClass in (
+				ChecklistClasses.CALL_CLASS_INT,
+				ChecklistClasses.CALL_CLASS_INTR,
+				ChecklistClasses.CALL_CLASS_INTC,
+				ChecklistClasses.CALL_CLASS_ROI
+			),
+			$datetime : datetime
+		)
+        eval( (($endDatetime.getTime() - $datetime.getTime()) / 86400000) > 149 )
+	then
+		results.add(buildR11Consequence(dimensionCache, consequenceBuilder, $usage, 
+			"R11-2", "Vigência da Chamada Internacional Expirou" ));
+end

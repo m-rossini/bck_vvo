@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<project name="VIVO Server Packaging" basedir="@[user.dir]@" default="build-distribution">
+
+	<property file="@[user.dir]@/src/packaging/license.properties"/>
+	<property environment="env"/>
+	<property   name="bundle.workdir"
+				value="@[user.dir]@/target/bundling"/>
+	<property   name="bundle.filename.prod"
+				value="@[project.currentArtifact]@-@[project.currentVersion]@.prod.zip"/>
+	<property   name="bundle.filename.homl"
+				value="@[project.currentArtifact]@-@[project.currentVersion]@.homl.zip"/>
+	<property   name="bundle.filename.asr1"
+				value="@[project.currentArtifact]@-@[project.currentVersion]@.asr1.zip"/>
+
+	<property   name="source.dir"
+				value="@[user.dir]@/src/main"/>
+
+	<target name="prepare-workdir">
+		<delete dir="${bundle.workdir}"/>
+		<mkdir dir="${bundle.workdir}"/>
+		<mkdir dir="${bundle.workdir}/log"/>
+	</target>
+
+	<target name="license-file">
+		<java classname="br.com.auster.common.security.LockGenerator"
+            failonerror="true"
+		    fork="true">
+			<!-- classpath -->
+			<classpath>
+				<pathelement location="@[auster:auster-commons-base]@"/>
+				<pathelement location="@[jug:jug-asl]@"/>
+			</classpath>
+			<!-- Output filename -->
+			<arg file="${bundle.workdir}/${license.filename}"/>
+			<!-- Number of days the resource can be used (from the current date) -->
+			<arg value="${license.numberofdays}"/>
+			<!-- Product ID -->
+			<arg value="${license.productid}"/>
+			<!-- Number of times resource can be executed -->
+			<arg value="${license.numberoftimes}"/>
+			<!-- Restricts the execution to the specified IP address -->
+			<arg value="${license.ipaddress}"/>
+			<arg value="${license.macAddress}"/>
+		</java>
+	</target>
+
+	<target name="override-jms-object">
+		<jar destfile="target/@[vivo:vivo-billcheckout-server]@"
+			 update="true">
+			<zipfileset src="@[auster:auster-commons-base]@"
+                       includes="br/com/auster/common/security/ResourceReady.class"/>
+			<zipfileset dir="${source.dir}/conf" includes="key.bin"/>
+			<zipfileset src="@[auster:data-aware-stubs]@"/>
+			<zipfileset src="@[auster:dware-console-plugins]@"
+                       includes="br/com/auster/**/RequestFinished.class"/>
+			<zipfileset src="@[auster:dware-console-plugins]@"
+                        includes="br/com/auster/**/RequestCreation.class"/>
+			<zipfileset src="@[auster:dware-console-plugins]@"
+	                    includes="br/com/auster/**/FlowControlMessage.class"/>
+			<zipfileset src="@[auster:dware-console-plugins]@"
+	                       includes="br/com/auster/**/Stage.class"/>
+
+			<zipfileset src="@[auster:request-base]@"
+                       includes="br/com/auster/**/model/**.class"/>
+			<zipfileset src="@[auster:web-request]@"
+                       includes="br/com/auster/**/model/**.class"/>
+		</jar>
+
+	</target>
+
+	<target name="build-distribution" depends="prepare-workdir,override-jms-object,license-file">
+
+		<zip destfile="${bundle.workdir}/${bundle.filename.homl}">
+			<zipfileset file="${bundle.workdir}/license.bin"/>
+
+			<zipfileset dir="${source.dir}/conf/drools"    prefix="conf/drools"/>
+			<zipfileset dir="${source.dir}/conf/ep"        prefix="conf/ep"/>
+			<zipfileset dir="${source.dir}/conf/import"    prefix="conf/import"/>
+			<zipfileset dir="${source.dir}/conf/logging"   prefix="conf/logging"/>
+			<zipfileset dir="${source.dir}/conf/parm"      prefix="conf/parm"/>
+			<zipfileset dir="${source.dir}/conf/sirs"      prefix="conf/sirs"/>
+
+			<zipfileset dir="${source.dir}/conf/homl"        prefix="conf/"/>
+			<zipfileset dir="${source.dir}/conf/sql/homl"    prefix="conf/sql"/>
+			<zipfileset dir="${source.dir}/conf/jms/homl"    prefix="conf/jms"/>
+			<zipfileset dir="${source.dir}/conf/image"       prefix="conf/image"/>
+
+			<zipfileset dir="${source.dir}/bin/homl"         prefix="bin"/>
+
+			<zipfileset dir="${source.dir}/etc"    prefix="etc"/>
+			<zipfileset dir="${bundle.workdir}/log" prefix="log"/>
+			<!-- dependent lib.s -->
+			<zipfileset file="@[mx4j:mx4j]@" prefix="lib"/>
+			<zipfileset file="@[mx4j:mx4j-remote]@" prefix="lib"/>
+			<zipfileset file="@[mx4j:mx4j-tools]@" prefix="lib"/>
+			<zipfileset file="@[log4j:log4j]@" prefix="lib"/>
+			<zipfileset file="@[commons-math:commons-math]@" prefix="lib"/>
+			<zipfileset file="@[commons-cli:commons-cli]@" prefix="lib"/>
+			<zipfileset file="@[commons-collections:commons-collections]@" prefix="lib"/>
+			<zipfileset file="@[commons-dbcp:commons-dbcp]@" prefix="lib"/>
+			<zipfileset file="@[commons-pool:commons-pool]@" prefix="lib"/>
+			<zipfileset file="@[commons-lang:commons-lang]@" prefix="lib"/>
+			<zipfileset file="@[commons-io:commons-io]@" prefix="lib"/>
+			<zipfileset file="@[commons-logging:commons-logging]@" prefix="lib"/>
+			<zipfileset file="@[commons-jxpath:commons-jxpath]@" prefix="lib"/>
+			<zipfileset file="@[trove:trove]@" prefix="lib"/>
+			<zipfileset file="@[bea:weblogic]@" prefix="lib"/>
+			<zipfileset file="@[ant:ant]@" prefix="lib"/>
+			<zipfileset file="@[org.hibernate:hibernate]@" prefix="lib"/>
+			<zipfileset file="@[org.drools:drools-core]@" prefix="lib"/>
+			<zipfileset file="@[org.drools:drools-compiler]@" prefix="lib"/>
+			<zipfileset file="@[org.eclipse:core]@" prefix="lib"/>
+			<zipfileset file="@[org.apache:commons-jci-core]@" prefix="lib"/>
+			<zipfileset file="@[org.apache:commons-jci-eclipse]@" prefix="lib"/>
+			<zipfileset file="@[org.apache:commons-jci-janino]@" prefix="lib"/>
+			<zipfileset file="@[antlr:antlr-runtime]@" prefix="lib"/>
+			<zipfileset file="@[mvel:mvel14]@" prefix="lib"/>
+			<zipfileset file="@[minaret:datedFileAppender]@" prefix="lib"/>
+			<zipfileset file="@[asm:asm]@" prefix="lib"/>
+			<zipfileset file="@[asm:auster-asm]@" prefix="lib"/>
+			<zipfileset file="@[groovy:groovy-all]@" prefix="lib"/>
+			<zipfileset file="@[oracle:oracle-jdbc4]@" prefix="lib"/>
+			<zipfileset file="@[dom4j:dom4j]@" prefix="lib"/>
+			<zipfileset file="@[cglib:cglib]@" prefix="lib"/>
+			<zipfileset file="@[jug:jug-asl]@" prefix="lib"/>
+			<zipfileset file="@[ehcache:ehcache]@" prefix="lib"/>
+			<zipfileset file="@[javax.transaction:jta]@" prefix="lib"/>
+			<zipfileset file="@[com.thoughtworks.xstream:xstream]@" prefix="lib"/>
+			<zipfileset file="@[sun:FastInfoset]@" prefix="lib"/>
+			<zipfileset file="@[xpp3:xpp3_min]@" prefix="lib"/>
+			<zipfileset file="@[auster:productreport]@" prefix="lib"/>
+			<zipfileset file="@[fop:fop]@" prefix="lib"/>
+			<zipfileset file="@[avalon-framework:avalon-framework]@" prefix="lib"/>
+			<zipfileset file="@[batik:batik-1.5-fop]@" prefix="lib"/>
+			<!-- endorsed libs. -->
+			<zipfileset file="@[xalan:xalan]@" prefix="lib/endorsed"/>
+			<!-- cmdline jar -->
+			<zipfileset file="target/@[vivo:vivo-billcheckout-server]@" prefix="lib"/>
+		</zip>
+
+		<zip destfile="${bundle.workdir}/${bundle.filename.asr1}">
+			<zipfileset file="${bundle.workdir}/license.bin"/>
+
+			<zipfileset dir="${source.dir}/conf/drools"    prefix="conf/drools"/>
+			<zipfileset dir="${source.dir}/conf/ep"        prefix="conf/ep"/>
+			<zipfileset dir="${source.dir}/conf/import"    prefix="conf/import"/>
+			<zipfileset dir="${source.dir}/conf/logging"   prefix="conf/logging"/>
+			<zipfileset dir="${source.dir}/conf/parm"      prefix="conf/parm"/>
+			<zipfileset dir="${source.dir}/conf/sirs"      prefix="conf/sirs"/>
+
+			<zipfileset dir="${source.dir}/conf/asr1"    	 prefix="conf/"/>
+			<zipfileset dir="${source.dir}/conf/sql/asr1"    prefix="conf/sql"/>
+			<zipfileset dir="${source.dir}/conf/jms/asr1"    prefix="conf/jms"/>
+			<zipfileset dir="${source.dir}/conf/image"       prefix="conf/image"/>
+
+			<zipfileset dir="${source.dir}/bin/asr1"         prefix="bin"/>
+
+			<zipfileset dir="${source.dir}/etc"    prefix="etc"/>
+			<zipfileset dir="${bundle.workdir}/log" prefix="log"/>
+			<!-- dependent lib.s -->
+			<zipfileset file="@[mx4j:mx4j]@" prefix="lib"/>
+			<zipfileset file="@[mx4j:mx4j-remote]@" prefix="lib"/>
+			<zipfileset file="@[mx4j:mx4j-tools]@" prefix="lib"/>
+			<zipfileset file="@[log4j:log4j]@" prefix="lib"/>
+			<zipfileset file="@[commons-math:commons-math]@" prefix="lib"/>
+			<zipfileset file="@[commons-cli:commons-cli]@" prefix="lib"/>
+			<zipfileset file="@[commons-collections:commons-collections]@" prefix="lib"/>
+			<zipfileset file="@[commons-dbcp:commons-dbcp]@" prefix="lib"/>
+			<zipfileset file="@[commons-pool:commons-pool]@" prefix="lib"/>
+			<zipfileset file="@[commons-lang:commons-lang]@" prefix="lib"/>
+			<zipfileset file="@[commons-io:commons-io]@" prefix="lib"/>
+			<zipfileset file="@[commons-logging:commons-logging]@" prefix="lib"/>
+			<zipfileset file="@[commons-jxpath:commons-jxpath]@" prefix="lib"/>
+			<zipfileset file="@[trove:trove]@" prefix="lib"/>
+			<zipfileset file="@[bea:weblogic]@" prefix="lib"/>
+			<zipfileset file="@[ant:ant]@" prefix="lib"/>
+			<zipfileset file="@[org.hibernate:hibernate]@" prefix="lib"/>
+			<zipfileset file="@[org.drools:drools-core]@" prefix="lib"/>
+			<zipfileset file="@[org.drools:drools-compiler]@" prefix="lib"/>
+			<zipfileset file="@[org.eclipse:core]@" prefix="lib"/>
+			<zipfileset file="@[org.apache:commons-jci-core]@" prefix="lib"/>
+			<zipfileset file="@[org.apache:commons-jci-eclipse]@" prefix="lib"/>
+			<zipfileset file="@[org.apache:commons-jci-janino]@" prefix="lib"/>
+			<zipfileset file="@[antlr:antlr-runtime]@" prefix="lib"/>
+			<zipfileset file="@[mvel:mvel14]@" prefix="lib"/>
+			<zipfileset file="@[minaret:datedFileAppender]@" prefix="lib"/>
+			<zipfileset file="@[asm:asm]@" prefix="lib"/>
+			<zipfileset file="@[asm:auster-asm]@" prefix="lib"/>
+			<zipfileset file="@[groovy:groovy-all]@" prefix="lib"/>
+			<zipfileset file="@[oracle:oracle-jdbc4]@" prefix="lib"/>
+			<zipfileset file="@[dom4j:dom4j]@" prefix="lib"/>
+			<zipfileset file="@[cglib:cglib]@" prefix="lib"/>
+			<zipfileset file="@[jug:jug-asl]@" prefix="lib"/>
+			<zipfileset file="@[ehcache:ehcache]@" prefix="lib"/>
+			<zipfileset file="@[javax.transaction:jta]@" prefix="lib"/>
+			<zipfileset file="@[com.thoughtworks.xstream:xstream]@" prefix="lib"/>
+			<zipfileset file="@[sun:FastInfoset]@" prefix="lib"/>
+			<zipfileset file="@[xpp3:xpp3_min]@" prefix="lib"/>
+			<zipfileset file="@[auster:productreport]@" prefix="lib"/>
+			<zipfileset file="@[fop:fop]@" prefix="lib"/>
+			<zipfileset file="@[avalon-framework:avalon-framework]@" prefix="lib"/>
+			<zipfileset file="@[batik:batik-1.5-fop]@" prefix="lib"/>
+			<!-- endorsed libs. -->
+			<zipfileset file="@[xalan:xalan]@" prefix="lib/endorsed"/>
+			<!-- cmdline jar -->
+			<zipfileset file="target/@[vivo:vivo-billcheckout-server]@" prefix="lib"/>
+		</zip>
+
+		<zip destfile="${bundle.workdir}/${bundle.filename.prod}">
+			<zipfileset file="${bundle.workdir}/license.bin"/>
+
+			<zipfileset dir="${source.dir}/conf/drools"    prefix="conf/drools"/>
+			<zipfileset dir="${source.dir}/conf/ep"        prefix="conf/ep"/>
+			<zipfileset dir="${source.dir}/conf/import"    prefix="conf/import"/>
+			<zipfileset dir="${source.dir}/conf/logging"   prefix="conf/logging"/>
+			<zipfileset dir="${source.dir}/conf/parm"      prefix="conf/parm"/>
+			<zipfileset dir="${source.dir}/conf/sirs"      prefix="conf/sirs"/>
+
+			<zipfileset dir="${source.dir}/conf/prod"    	 prefix="conf/"/>
+			<zipfileset dir="${source.dir}/conf/sql/prod"    prefix="conf/sql"/>
+			<zipfileset dir="${source.dir}/conf/jms/prod"    prefix="conf/jms"/>
+			<zipfileset dir="${source.dir}/conf/image"       prefix="conf/image"/>
+
+			<zipfileset dir="${source.dir}/bin/prod"         prefix="bin"/>
+
+
+			<zipfileset dir="${source.dir}/bin/prod"     prefix="bin"/>
+
+			<zipfileset dir="${source.dir}/etc"    prefix="etc"/>
+			<zipfileset dir="${bundle.workdir}/log" prefix="log"/>
+			<!-- dependent lib.s -->
+			<zipfileset file="@[mx4j:mx4j]@" prefix="lib"/>
+			<zipfileset file="@[mx4j:mx4j-remote]@" prefix="lib"/>
+			<zipfileset file="@[mx4j:mx4j-tools]@" prefix="lib"/>
+			<zipfileset file="@[log4j:log4j]@" prefix="lib"/>
+			<zipfileset file="@[commons-math:commons-math]@" prefix="lib"/>
+			<zipfileset file="@[commons-cli:commons-cli]@" prefix="lib"/>
+			<zipfileset file="@[commons-collections:commons-collections]@" prefix="lib"/>
+			<zipfileset file="@[commons-dbcp:commons-dbcp]@" prefix="lib"/>
+			<zipfileset file="@[commons-pool:commons-pool]@" prefix="lib"/>
+			<zipfileset file="@[commons-lang:commons-lang]@" prefix="lib"/>
+			<zipfileset file="@[commons-io:commons-io]@" prefix="lib"/>
+			<zipfileset file="@[commons-logging:commons-logging]@" prefix="lib"/>
+			<zipfileset file="@[commons-jxpath:commons-jxpath]@" prefix="lib"/>
+			<zipfileset file="@[trove:trove]@" prefix="lib"/>
+			<zipfileset file="@[bea:weblogic]@" prefix="lib"/>
+			<zipfileset file="@[ant:ant]@" prefix="lib"/>
+			<zipfileset file="@[org.hibernate:hibernate]@" prefix="lib"/>
+			<zipfileset file="@[org.drools:drools-core]@" prefix="lib"/>
+			<zipfileset file="@[org.drools:drools-compiler]@" prefix="lib"/>
+			<zipfileset file="@[org.eclipse:core]@" prefix="lib"/>
+			<zipfileset file="@[org.apache:commons-jci-core]@" prefix="lib"/>
+			<zipfileset file="@[org.apache:commons-jci-eclipse]@" prefix="lib"/>
+			<zipfileset file="@[org.apache:commons-jci-janino]@" prefix="lib"/>
+			<zipfileset file="@[antlr:antlr-runtime]@" prefix="lib"/>
+			<zipfileset file="@[mvel:mvel14]@" prefix="lib"/>
+			<zipfileset file="@[minaret:datedFileAppender]@" prefix="lib"/>
+			<zipfileset file="@[asm:asm]@" prefix="lib"/>
+			<zipfileset file="@[asm:auster-asm]@" prefix="lib"/>
+			<zipfileset file="@[groovy:groovy-all]@" prefix="lib"/>
+			<zipfileset file="@[oracle:oracle-jdbc4]@" prefix="lib"/>
+			<zipfileset file="@[dom4j:dom4j]@" prefix="lib"/>
+			<zipfileset file="@[cglib:cglib]@" prefix="lib"/>
+			<zipfileset file="@[jug:jug-asl]@" prefix="lib"/>
+			<zipfileset file="@[ehcache:ehcache]@" prefix="lib"/>
+			<zipfileset file="@[javax.transaction:jta]@" prefix="lib"/>
+			<zipfileset file="@[com.thoughtworks.xstream:xstream]@" prefix="lib"/>
+			<zipfileset file="@[sun:FastInfoset]@" prefix="lib"/>
+			<zipfileset file="@[xpp3:xpp3_min]@" prefix="lib"/>
+			<zipfileset file="@[auster:productreport]@" prefix="lib"/>
+			<zipfileset file="@[fop:fop]@" prefix="lib"/>
+			<zipfileset file="@[avalon-framework:avalon-framework]@" prefix="lib"/>
+			<zipfileset file="@[batik:batik-1.5-fop]@" prefix="lib"/>
+			<!-- endorsed libs. -->
+			<zipfileset file="@[xalan:xalan]@" prefix="lib/endorsed"/>
+			<!-- cmdline jar -->
+			<zipfileset file="target/@[vivo:vivo-billcheckout-server]@" prefix="lib"/>
+		</zip>
+
+	</target>
+
+</project>
+

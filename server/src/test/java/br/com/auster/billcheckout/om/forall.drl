@@ -1,0 +1,10 @@
+package br.com.auster.rules.testing;
+
+import br.com.auster.billcheckout.om.Person;
+
+rule "Forall 01"
+when
+    not (forall ( Person(firstName == "Person1"  ) ))
+then
+	System.out.println("Rule Fired:" + drools.getRule().getName());
+end

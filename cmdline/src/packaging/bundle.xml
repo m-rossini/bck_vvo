@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<project name="VIVO Cmdline Packaging" basedir="@[user.dir]@" default="build-distribution">
+
+    <property environment="env"/>
+	<property   name="bundle.workdir" 
+				value="@[user.dir]@/target/bundling"/>
+	<property   name="bundle.filename" 
+				value="@[project.currentArtifact]@-@[project.currentVersion]@.zip"/>
+	<property   name="source.dir"      
+				value="@[user.dir]@/src/main"/>
+
+	<target name="prepare-workdir">
+		<delete dir="${bundle.workdir}"/>
+		<mkdir dir="${bundle.workdir}"/>
+		<mkdir dir="${bundle.workdir}/log"/>		
+	</target>
+	
+	<target name="override-jms-object">
+        <jar destfile="target/@[vivo:vivo-billcheckout-cmdline]@"         
+			 update="true">
+           <zipfileset src="@[auster:dware-console-plugins]@"
+                       includes="br/com/auster/**/RequestCreation.class"/>
+           <zipfileset src="@[auster:dware-console-plugins]@"
+                       includes="br/com/auster/**/FlowControlMessage.class"/>
+           <zipfileset src="@[auster:dware-console-plugins]@"
+                       includes="br/com/auster/**/Stage.class"/>                                              
+           <zipfileset src="@[auster:request-base]@"
+                       includes="br/com/auster/**/model/**.class"/>
+           <zipfileset src="@[auster:web-request]@"
+                       includes="br/com/auster/**/model/**.class"/>
+        </jar>
+	</target>
+	
+    <target name="build-distribution" depends="prepare-workdir,override-jms-object">
+
+		<zip destfile="${bundle.workdir}/${bundle.filename}">
+			<zipfileset dir="${source.dir}/bin"     prefix="bin" 
+				        includes="cmdline-*"/>
+			<zipfileset dir="${source.dir}/bin"     prefix="bin" 
+				        includes="stop-*"/>				        
+			<zipfileset dir="${source.dir}/conf"    prefix="conf" 
+				        includes="cmdline-data-definition.xml,cmdline.properties"/>
+			<zipfileset dir="${bundle.workdir}/log" prefix="log"/>
+			<!-- dependent lib.s -->
+			<zipfileset file="@[log4j:log4j]@" prefix="lib"/>
+			<zipfileset file="@[commons-cli:commons-cli]@" prefix="lib"/>
+			<zipfileset file="@[commons-lang:commons-lang]@" prefix="lib"/>
+			<zipfileset file="@[trove:trove]@" prefix="lib"/>
+			<zipfileset file="@[ant:ant]@" prefix="lib"/>
+			<zipfileset file="@[bea:wlclient]@" prefix="lib"/>
+			<zipfileset file="@[bea:wljmsclient]@" prefix="lib"/>
+			<!-- endorsed libs. -->			
+			<zipfileset file="@[xalan:xalan]@" prefix="lib/endorsed"/>
+			<!-- cmdline jar -->
+			<zipfileset file="target/@[vivo:vivo-billcheckout-cmdline]@" prefix="lib"/>
+		</zip>
+	</target>
+	
+</project>
+

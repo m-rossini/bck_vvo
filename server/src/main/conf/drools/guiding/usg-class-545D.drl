@@ -1,0 +1,161 @@
+#package br.com.auster.rules.vivo;
+
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+
+global java.util.List results;
+
+#
+#  545D - Chamadas Recebidas a Cobrar - Exceto Locais
+#
+rule "545D VC2C MM" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+        	tag == "545D",
+        	caption == "INTERÁREA",
+        	eval(calledNumber.length() > 3),
+        	eval("789".contains(calledNumber.substring(2,3)))
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC2C);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_MM);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());        
+        $usage.setCallAsHome();
+        $usage.setCallAsLongDistance(); 
+        $usage.setCallAsCollect();    
+        $usage.setDetailCFOP("1160");    
+end
+
+rule "545D VC2C MF" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+        	tag == "545D",
+        	caption == "INTERÁREA",        
+        	eval(calledNumber.length() > 3),
+			eval("_123456".contains(calledNumber.substring(2,3)))
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC2C);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_MF);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());  
+        $usage.setCallAsHome();
+        $usage.setCallAsLongDistance(); 
+        $usage.setCallAsCollect();     
+        $usage.setDetailCFOP("1160");         
+end
+
+rule "545D VC2C NC" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+        	tag == "545D",
+        	caption == "INTERÁREA",      
+        	eval(calledNumber.length() > 3),  
+			eval(! "_123456789".contains(calledNumber.substring(2,3)))
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC2C);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_NC);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());    
+        $usage.setCallAsHome();
+        $usage.setCallAsLongDistance(); 
+        $usage.setCallAsCollect();      
+        $usage.setDetailCFOP("1160");      
+end
+
+rule "545D VC3C MM" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail(
+        	tag == "545D",
+        	caption == "INTERESTADUAL",
+        	eval(calledNumber.length() > 3),
+			eval("789".contains(calledNumber.substring(2,3)))
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC3C);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_MM);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());   
+        $usage.setCallAsHome();
+        $usage.setCallAsLongDistance(); 
+        $usage.setCallAsCollect();      
+        $usage.setDetailCFOP("1160");       
+end
+
+rule "545D VC3C MF" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+        	tag == "545D",
+        	caption == "INTERESTADUAL",        
+        	eval(calledNumber.length() > 3),
+			eval("_123456".contains(calledNumber.substring(2,3)))
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC3C);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_MF);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());  
+        $usage.setCallAsHome();
+        $usage.setCallAsLongDistance(); 
+        $usage.setCallAsCollect();    
+        $usage.setDetailCFOP("1160");          
+end
+
+rule "545D VC3C NC" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+        	tag == "545D",
+        	caption == "INTERESTADUAL",          
+        	eval(calledNumber.length() > 3),
+			eval(! "_123456789".contains(calledNumber.substring(2,3)))
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC3C);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_NC);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());   
+        $usage.setCallAsHome();
+        $usage.setCallAsLongDistance(); 
+        $usage.setCallAsCollect();   
+        $usage.setDetailCFOP("1160");          
+end
+
+rule "545D INTC U" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+        	tag == "545D" ,
+            caption == "INTBRASDIRETO"
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_INTC);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_UNIQUE);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());   
+        $usage.setCallAsHome();
+        $usage.setCallAsLongDistance(); 
+        $usage.setCallAsCollect();   
+        $usage.setDetailCFOP("1160");          
+end

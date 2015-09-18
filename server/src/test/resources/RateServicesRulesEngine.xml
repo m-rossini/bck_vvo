@@ -1,0 +1,53 @@
+<config>
+	<input-list-tag name="invoice-om" />
+	<results-map-tag name="no-results" />
+
+	<assertionEngine
+		class-name="br.com.auster.billcheckout.rules.assertion.XPathContextAssertionEngine"
+		xpath-file="src/main/conf/asr1/context-om-objects.xml" />
+
+	<rules-engine
+		class-name="br.com.auster.billcheckout.rules.Drools4DirectoriesRulesEngineProcessor">
+		<listeners
+			memoryListenerClass="br.com.auster.billcheckout.rules.listeners.StandardSessionListener"
+			agendaListenerClass="br.com.auster.billcheckout.rules.listeners.StandardAgendaListener"
+			flowListenerClass="br.com.auster.billcheckout.rules.listeners.StandardFlowListener"
+			agentListenerClass="br.com.auster.billcheckout.rules.listeners.StandardAgentListener" />
+
+		<RuleBaseConfig
+			propertiesFile="src/main/conf/asr1/rulebaseguiding.properties" />
+		<RuleAgentConfig
+			propertiesFile="src/main/conf/asr1/ruleagent.properties" />
+		<PackageBuilderConfig
+			propertiesFile="src/main/conf/asr1/packagebuilder.properties" />
+
+		<RulePackages>
+		<!-- 
+			<RulePackage name="PackageCOUNT"
+				base="src/main/conf/drools/guiding" drlMask="count*.drl" /> 
+				-->				
+			<RulePackage name="PackageGUIDE"
+				base="src/main/conf/drools/guiding" drlMask="rate-sub*.drl" />
+		</RulePackages>
+
+	</rules-engine>
+	<globals-list>
+		<global name="priceEngine"
+			class-name="br.com.auster.vivo.billcheckout.pricing.SQLPricingFacadeImpl"
+			pool-name="sql/tiamatdb" skip-negotiables="false" cache-size="600"
+			notfoundset-size="50">
+
+			<negotiable-datasource pool-name="sql/localdb"
+				price-statement="USAGE_NEGOT_PRICE" subscription-statement="NONE" />
+
+		</global>
+		<global name="adBagReference"
+			class-name="br.com.auster.vivo.billcheckout.util.ADQualficationFacade"
+			config-file="" encrypted="false"
+			data-file="src/main/conf/parm/ad1rulesByState.txt" />
+		<global name="adBagReferenceAC"
+			class-name="br.com.auster.vivo.billcheckout.util.ADQualficationFacade"
+			config-file="" encrypted="false"
+			data-file="src/main/conf/parm/ad1rulesByAreaCode.txt" />
+	</globals-list>
+</config>

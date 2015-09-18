@@ -1,0 +1,57 @@
+
+<view display-name="Checklist de Tarifacao" datasource="ds2">
+	<columns>
+		<column name="uid" 				
+				table="bck_consequence" 			type="long"		
+				visible="false"/>						
+		<column name="external_id" 				display-name="Nr. da Requisição"
+				table="bck_consequence" 			type="long"		
+				visible="true"/>						
+		<column name="consequence_label" 			display-name="Plano de Serviços" 	
+				table="bck_consequence" 			type="varchar"		
+				visible="true"/>						
+		<column name="account_state" 				display-name="UF" 	
+				table="bck_consequence" 			type="varchar"		
+				visible="true"/>						
+		<column name="cycle_code" 				    display-name="Ciclo de Faturamento" 	
+				table="bck_consequence" 			type="varchar"		
+				visible="true"/>					
+		<!-- linking with checklist attributes -->	
+		<column name="consequence_id" 				
+				table="bck_consequence_attr"		type="long"		
+				visible="false"/>						
+		<column name="attr_uid" 				
+				table="bck_consequence_attr"		type="long"		
+				visible="false"/>						
+		<!-- checklist info -->
+		<column name="uid" 				
+				table="bck_consequence_checklist"	type="long"		
+				visible="false"/>						
+		<column name="call_class" 				    display-name="Classe"
+				table="bck_consequence_checklist"   type="varchar"		
+				visible="true"/>						
+		<column name="call_subclass" 				display-name="SubClasse"
+				table="bck_consequence_checklist" 	type="varchar"		
+				visible="true"/>						
+		<column name="tariff" 					    display-name="Tarifa"
+				table="bck_consequence_checklist" 	type="varchar"		
+				visible="true"/>						
+		<column name="error_counter" 				display-name="Total de Erros"
+				table="bck_consequence_checklist" 	type="long"		
+				visible="true"/>						
+		<column name="total_counter" 				display-name="Total Validado"
+				table="bck_consequence_checklist" 	type="long"		
+				visible="true"/>						
+	</columns>
+	<relations>
+		<relation from-table="bck_consequence"
+				  from-column="uid"
+				  to-table="bck_consequence_attr"
+				  to-column="consequence_id"/>
+		<relation from-table="bck_consequence_attr"
+				  from-column="attr_uid"
+				  to-table="bck_consequence_checklist"
+				  to-column="uid"/>
+	</relations>
+</view>
+

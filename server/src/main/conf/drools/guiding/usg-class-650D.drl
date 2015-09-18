@@ -1,0 +1,106 @@
+#package br.com.auster.rules.vivo;
+
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+
+global java.util.List results;
+
+#
+#  650D - Short Message
+#
+rule "650D TORPEDO OUTROS" 
+    salience 95 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+            tag == "650D",
+    		groupId not in ("TORPEDO SMS", "TORP OUTRA OPERADORA", "TORPEDO OUTRO ESTADO", "SMS VIVO PARA VIVO", "TORPEDO MMS"  ) 
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_TORPEDO);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_OTHER);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setDetailCFOP("1230");       
+end
+
+rule "650D TORPEDO SMS" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "650D", 
+                              groupId == "TORPEDO SMS" )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_TORPEDO);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_SMS);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());  
+        $usage.setDetailCFOP("1230");      
+end
+
+rule "650D TORPEDO CARRIER" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "650D", 
+                              groupId == "TORP OUTRA OPERADORA" )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_TORPEDO);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_CARRIER);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());   
+        $usage.setDetailCFOP("1230");     
+end
+
+rule "650D TORPEDO STATE" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "650D", 
+                              groupId == "TORPEDO OUTRO ESTADO" )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_TORPEDO);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_STATE);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());   
+        $usage.setDetailCFOP("1230");     
+end
+
+rule "650D TORPEDO VIVO" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "650D", 
+                              groupId == "SMS VIVO PARA VIVO" )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_TORPEDO);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_VIVO);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());  
+        $usage.setDetailCFOP("1230");      
+end
+
+rule "650D TORPEDO MMS" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "650D", 
+                              groupId == "TORPEDO MMS" )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_TORPEDO);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_MMS);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setDetailCFOP("1230");       
+end

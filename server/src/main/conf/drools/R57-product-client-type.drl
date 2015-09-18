@@ -1,0 +1,81 @@
+package br.com.auster.rules.vivo.R57;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Iterator;
+
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Identity;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.om.invoice.Section;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.vivo.billcheckout.caches.R57CustomerTypePlanCache;
+import br.com.auster.vivo.billcheckout.caches.R57CustomerTypeCnpjPlanCache;
+
+global br.com.auster.vivo.billcheckout.caches.R57CustomerTypeCnpjPlanCache customerTypeCnpjPlanCache; 
+global br.com.auster.vivo.billcheckout.caches.R57CustomerTypePlanCache customerTypePlanCache; 
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+
+/**
+ *  Regra 57 - Validação Produto X Tipo Cliente X cliente CNPJ
+ */
+
+function TelcoConsequence buildR57Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 String ruleNbr, String desc, Account account, ServiceDetail serv) {
+    consequenceBuilder.setRule(ruleNbr, "Produto/Cliente Incompativel");
+    consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+    consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+    consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+    consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+    consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(account.getCarrierCode()));
+
+    TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+    c.setDescription(desc);	
+    c.addAttribute("Nome Cliente", account.getAccountName());
+    c.addAttribute("NomeDoServico", serv.getCaption());
+    c.addAttribute("Svc. Price Seq. Nbr.", serv.getSvcId());
+    c.addAttribute("Ciclo", account.getInvoice().getCycleCode());
+    c.addAttribute("Subscrição", serv.getSection().getSubscriptionid());
+    c.addAttribute("Terminal",  serv.getSection().getAccessNbr());
+    c.addAttribute("Tipo de Documento", (account.getIdentity("CNPJ") != null ? "CNPJ" : "CPF"));
+    c.addAttribute("Tipo de Cliente", account.getAccountType());
+    return c;
+}
+
+/* 57-02 - Produtos exclusivos de Conta CNPJ */
+rule "Regra 57-1" 
+salience 70
+    when
+    	$acc : Account ( $id : identities['CPF'] -> ($id != null)  )
+
+        $serv : ServiceDetail( tag in("320D","325D","330D"))
+    then	
+        if (customerTypeCnpjPlanCache.isPlanOnlyCNPJ($serv.getSvcId())) {
+			results.add(buildR57Consequence(dimensionCache, consequenceBuilder, "R57-01", "Produto Exclusivo para conta CNPJ", $acc, $serv ));
+		}
+end
+
+/* 57-02 - Produtos exclusivos por Tipo de Cliente */
+rule "Regra 57-02" 
+salience 70
+    when
+        $acc : Account( $accTyp : accountType  )
+
+        $serv : ServiceDetail( tag in("320D","325D","330D"))
+
+    then	
+        if (!customerTypePlanCache.isPlanRightCustType($serv.getSvcId(), $accTyp)) {
+			results.add(buildR57Consequence(dimensionCache, consequenceBuilder, "R57-02", "Produto Incompatível com tipo de Cliente", $acc, $serv ));
+		}
+end

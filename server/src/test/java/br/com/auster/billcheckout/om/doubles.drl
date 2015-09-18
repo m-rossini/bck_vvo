@@ -1,0 +1,29 @@
+package br.com.auster.rules.testing;
+
+import br.com.auster.billcheckout.om.NamedDouble
+
+rule "Teste01"
+ salience 100
+ when
+  not ( NamedDouble ( name == "nbrs" ) )
+ then
+  NamedDouble nbrs = new NamedDouble("nbrs");
+  insert(nbrs);
+  System.out.println("R1. name: " + nbrs.getName()); 
+end
+
+rule "Test02"
+ salience 50
+ when
+  $nbrs : NamedDouble( name == "nbrs" ) 
+ then
+  System.out.println("R2. name: " + $nbrs.getName()); 
+end
+
+rule "Test03"
+ salience 50
+ when
+  $nbrs : NamedDouble( eval($nbrs.getName().equals("nbrs") ) )
+ then
+  System.out.println("R3. name: " + $nbrs.getName()); 
+end

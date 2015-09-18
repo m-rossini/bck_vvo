@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<project name="auster-billcheckout" default="remove.transaction.run">
+
+    <property environment="env"/>
+
+    <target name="remove.transaction.run">
+
+    <path id="run.classpath">
+       <fileset dir="${basedir}/lib" includes="*"/>
+       <pathelement location="${basedir}/conf"/>
+    </path>
+
+       <java classname="br.com.auster.billcheckout.utils.DeleteWebRequestBatch"
+	     resultproperty="java.result" 
+             fork="yes"
+             dir="${basedir}">
+
+		<jvmarg value="-d64"/>
+	        <jvmarg value="-Xms1024M"/>
+	        <jvmarg value="-Xmx1024M"/>
+	        <jvmarg value="-server"/>
+		<!-- LWP thread model -->
+        	<jvmarg value="-XX:+UseBoundThreads"/>
+		<!-- GC customization -->
+	        <jvmarg value="-XX:+UseParallelGC"/>
+
+		<sysproperty key="java.endorsed.dirs"
+             	     value="${basedir}/lib/endorsed"/>
+
+		<sysproperty key="jdbc.drivers"
+                     value="org.apache.commons.dbcp.PoolingDriver:oracle.jdbc.driver.OracleDriver"/>
+			
+		<sysproperty key="br.com.auster.billcheckout.RemoveTransaction" value="true"/>			
+
+		<arg value="${conf.log}"/>
+		<arg value="-q"/>
+		<arg file="${conf.sql}"/>
+		<classpath>
+			<path refid="run.classpath"/>
+		</classpath>
+	</java>
+
+    <fail message="Resultado do Remove Transaction" status="${java.result}">
+      <condition>
+        <or>
+          <not>
+            <isset property="java.result" />
+          </not>
+          <not>
+            <equals arg1="${java.result}" arg2="0" />
+          </not>
+        </or>
+      </condition>
+    </fail>
+    
+    </target>
+    
+</project>

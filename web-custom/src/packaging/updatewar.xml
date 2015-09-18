@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<project name="packaging" default="update" basedir="@[user.dir]@">
+
+	<target name="update">
+		<war destfile="target/@[vivo:vivo-billcheckout-web]@" update="true">
+			<lib dir="@[user.dir]@/target">
+				<include name="@[project.currentArtifact]@-@[project.currentVersion]@.jar"/>
+			</lib>
+		</war>
+	</target>
+</project>

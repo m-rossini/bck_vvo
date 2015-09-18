@@ -1,0 +1,323 @@
+#package br.com.auster.rules.vivo;
+
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+import br.com.auster.common.rules.GlobalForLog;
+
+global java.util.List results;
+global br.com.auster.billcheckout.param.SimpleObjectComparation adBagReference;
+#global br.com.auster.billcheckout.param.SimpleObjectComparation adBagReferenceAC;
+
+#
+#  555D - Chamadas LOCAIS Originadas em Roaming
+#
+rule "555D Franquia VC1SPV" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+			tag == "555D",
+			caption == "GRATIS",
+			objectType != "A",
+			calledNumber != "555",
+			calledNumber != "*555",
+			calledNumber != "*365",
+			calledNumber != "*2211"
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_FRANQUIA);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_VC1SPV);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());    
+        $usage.setCallAsRoaming();
+        $usage.setCallAsLocal();    
+        $usage.setDetailCFOP("1170");
+end
+
+rule "555D Franquia CX POSTAL" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+			tag == "555D" , 
+            caption == "GRATIS",
+			objectType != "A",
+			calledNumber == "555" || == "*555"                                         
+		)
+    then    	
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_FRANQUIA);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_555);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());    
+        $usage.setCallAsRoaming();
+        $usage.setCallAsLocal();    
+        $usage.setDetailCFOP("1170");
+end
+
+rule "555D VC1R CX POSTAL" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail(
+			tag == "555D", 
+			caption == "LOCAL",
+			calledNumber == "555" || == "*555",     
+			objectType != "A"
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC1R);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_555);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setCallAsRoaming();
+        $usage.setCallAsLocal();  
+        $usage.setDetailCFOP("1170");                 
+end
+
+rule "555D Franquia Vivo Informa" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+			tag == "555D" , 
+            caption == "GRATIS",
+			objectType != "A",
+			calledNumber == "*365"                                         
+		)
+    then    	
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_FRANQUIA);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_VIVOINFORMA);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());    
+        $usage.setCallAsRoaming();
+        $usage.setCallAsLocal();    
+        $usage.setDetailCFOP("1170");
+end
+
+rule "555D VC1R Vivo Informa" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail(
+			tag == "555D", 
+			caption == "LOCAL",
+			calledNumber == "*365",     
+			objectType != "A"
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC1R);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_VIVOINFORMA);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setCallAsRoaming();
+        $usage.setCallAsLocal();  
+        $usage.setDetailCFOP("1170");                 
+end
+
+rule "555D Franquia Portal de Voz" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+			tag == "555D" , 
+            caption == "GRATIS",
+			objectType != "A",
+			calledNumber == "*2211"                                         
+		)
+    then    	
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_FRANQUIA);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_PORTALVOZ);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());    
+        $usage.setCallAsRoaming();
+        $usage.setCallAsLocal();    
+        $usage.setDetailCFOP("1170");
+end
+
+rule "555D VC1R Portal de Voz" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail(
+			tag == "555D", 
+			caption == "LOCAL",
+			calledNumber == "*2211",     
+			objectType != "A"
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC1R);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_PORTALVOZ);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setCallAsRoaming();
+        $usage.setCallAsLocal();  
+        $usage.setDetailCFOP("1170");                 
+end
+
+rule "555D VC1SPV MM" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail(
+			tag == "555D", 
+			caption == "LOCAL",
+			objectType != "A",
+			calledNumber != "555",
+			calledNumber != "*555",
+			calledNumber != "*365",
+			calledNumber != "*2211",
+			eval(calledNumber.length() > 3),
+			eval("789".contains(calledNumber.substring(2,3)))
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC1R);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_MM);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setCallAsRoaming();
+        $usage.setCallAsLocal();  
+        $usage.setDetailCFOP("1170");                 
+end
+
+rule "555D VC1R MF" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+			tag == "555D", 
+			caption == "LOCAL",
+			objectType != "A",
+			calledNumber != "555",
+			calledNumber != "*555",
+			calledNumber != "*365",
+			calledNumber != "*2211",
+			eval(calledNumber.length() > 3),
+			eval("_123456".contains(calledNumber.substring(2,3)))
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC1R);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_MF);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setCallAsRoaming();
+        $usage.setCallAsLocal();
+        $usage.setDetailCFOP("1170");                   
+end
+
+rule "555D VC1SPV MF CX POSTAL" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+			tag == "555D" , 
+            caption == "LOCAL",
+			objectType != "A",
+			calledNumber == "555" || == "*555" ,
+			eval(calledNumber.length() > 3),
+			eval("_123456".contains(calledNumber.substring(2,3)))
+		)
+then
+    	$usage.setCallClass(ChecklistClasses.CALL_CLASS_VC1SPV);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_555);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setCallAsRoaming();
+        $usage.setCallAsLocal();
+        $usage.setDetailCFOP("1170");                   
+end
+
+rule "555D VC1SPV NC" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail(
+            tag == "555D", 
+            caption == "LOCAL" ,
+			objectType != "A",           
+			eval(calledNumber.length() > 3),
+			eval(! "_123456789".contains(calledNumber.substring(2,3)))
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC1SPV);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_NC);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setCallAsRoaming();
+        $usage.setCallAsLocal(); 
+        $usage.setDetailCFOP("1170");                  
+end
+
+rule "555D ADICIONAL U" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 	
+			tag == "555D",
+			caption == "ADICIONAL",
+			objectType != "A",						 
+        	$called : calledNumber ,
+        	$ori : originState ,
+		    $dst : destinationState                              
+		)
+    then
+		String accState = $usage.getSection().getParentSection().getParentSection().getSubscriptionState();
+		#GlobalForLog.log("INFO", "R19.AccState:" + accState + ".ORI:" + $ori + ".DST:" + $dst);				
+		if ($ori.equals("") && (! $called.startsWith("*")) ) {
+			$usage.setCallClass(ChecklistClasses.CALL_CLASS_AD3);	
+			#GlobalForLog.log("INFO", "R19.Previous situation is AD3");		
+		} else if ( (null != $ori) && (null != $dst) && (accState.equals($ori)) ) { 
+			$usage.setCallClass(ChecklistClasses.CALL_CLASS_AD1);
+			#GlobalForLog.log("INFO", "R19.Previous situation is AD1.A");
+		} else if (adBagReference.isValid(accState,$ori)) {
+			$usage.setCallClass(ChecklistClasses.CALL_CLASS_AD1);
+			#GlobalForLog.log("INFO", "R19.Previous situation is AD1.B");
+		} else {
+			$usage.setCallClass(ChecklistClasses.CALL_CLASS_AD2);	
+			#GlobalForLog.log("INFO", "R19.Previous situation is AD2");		
+		}
+		
+		#Sets the sub types		
+		if ( $called.startsWith("*") ) { 
+	        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_VC1SPV);		
+		} else {
+	        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_UNIQUE);
+        }
+        
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());  
+        $usage.setCallAsRoaming();
+        $usage.setCallAsLocal();
+        $usage.setDetailCFOP("1170");               		         
+end
+
+rule "555D 3RD PARTY U 1" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+				tag == "555D",
+				objectType != "A",  				 
+				eval (calledNumber.startsWith("0300"))
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_3RD_PARTY);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_0300);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());  
+        $usage.setCallAsRoaming();
+        $usage.setCallAsLocal();  
+        $usage.setDetailCFOP("1170");              
+end

@@ -1,0 +1,18 @@
+<?xml version="1.0" ?>
+<report-configuration name="ChecklistForRequestId">
+   <report-query>
+        SELECT DISTINCT cycle_code, cycle_end, consequence_label as service_plan, account_state, external_id 
+          FROM bck_consequence c 
+         WHERE c.external_id=$P{PARAM_REQUEST_ID} 
+           AND c.account_state=$P{PARAM_ACCT_STATE}
+           AND c.consequence_type='Checklist' 
+         ORDER BY cycle_code, cycle_end, consequence_label, account_state 
+   </report-query>
+   <images>
+       <image name="APPLICATION_LOGO" path="jasper/img/bc_logo.png"/>
+       <image name="COMPANY_LOGO"     path="jasper/img/auster_logo.png"/>
+       <image name="CUSTOMER_LOGO"    path="jasper/img/vivo_logo.png"/>
+   </images>
+   <virtualizer enabled="false" threshold="5000"/>
+</report-configuration>
+

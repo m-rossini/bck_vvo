@@ -1,0 +1,86 @@
+#author anardo
+#created on: Mar 18, 2008
+
+package br.com.auster.rules.vivo.R74
+
+#imports padrão
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import java.util.List;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.vivo.billcheckout.cache.vo.SharingServiceVO;
+import br.com.auster.vivo.billcheckout.cache.DataBarnSharingService;
+import br.com.auster.om.util.ParserUtils;
+
+#padrão
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.vivo.billcheckout.cache.DataBarnQueryExecutor dtbnQueryExecutor;
+global br.com.auster.vivo.billcheckout.caches.R74SharingPlanCache sharingPlanCache;
+
+global java.util.List results;
+
+function TelcoConsequence buildR74Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 				  String carrier, String ruleNbr, String desc, String cycle, String state, String nbrSubscr, 
+		 				  String plan, String caption, String freeUsage, String accessNbr, String leader, String usageAcum,
+		 				  String commSvcArea)
+		{
+		//setando parâmetros padrões para a consequência
+		consequenceBuilder.setRule(ruleNbr, "Compartilhamento de Franquia"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(carrier));
+		
+		//definindo os atributos que serão gerados na crítica
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription(desc); //descrição do tipo de erro ocorrido
+		//dados do SIRS
+		c.addAttribute("Ciclo" , cycle);
+		c.addAttribute("NomeDoServico", plan); //dado do result set
+		c.addAttribute("Estado", state); 
+		//dados do result set da conta 
+		c.addAttribute("Subscricao", nbrSubscr); 	
+		c.addAttribute("Caption", caption);
+		c.addAttribute("Flag Compartilhamento", freeUsage);	
+		c.addAttribute("Flag Servico/Plano", accessNbr); 	
+		c.addAttribute("Subscr. Leader", leader); 	
+		c.addAttribute("Código Acum", usageAcum); 			 
+		c.addAttribute("Área Serviço", commSvcArea); 			 	
+		 		
+  		return c;
+}
+
+rule "R74-01"
+salience 0
+	when
+		Account($accCarrierCode : carrierCode, //uso padrão no carrierCode da consequencia
+				$nmbAccount		: accountNumber,
+				$cycleEnd		: invoice.originalCycleEndDate, //Object
+				$cycleStart		: invoice.originalCycleStartDate, 
+				$cycle			: invoice.cycleCode, 
+				$state			: accountState  
+		)
+	then  
+		DataBarnSharingService dtbnSharing = new DataBarnSharingService($nmbAccount, $cycle, $cycleEnd, $cycleStart, dtbnQueryExecutor, sharingPlanCache);
+		dtbnSharing.validateRule();
+		List<SharingServiceVO> listConseq = dtbnSharing.getConsequence();
+		
+		if (listConseq!=null){
+			for(SharingServiceVO iteraList : listConseq){
+				results.add(buildR74Consequence(dimensionCache, consequenceBuilder, $accCarrierCode, "R74-01",
+						    iteraList.getNameError(), $cycle.toString(), $state, iteraList.getSbscrpId(), iteraList.getSvcName(),
+						    iteraList.getCaptnText(), iteraList.getFreeUsageAcross(), iteraList.getAccesNbrRqrFlag(),
+						    iteraList.getLeaderSbscrpId(), iteraList.getUsageAcumSeqNbr(), iteraList.getCommSvcAreaId() ));
+			}			
+		}
+end

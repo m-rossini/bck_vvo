@@ -1,0 +1,23 @@
+<?xml version="1.0" ?>
+<report-configuration name="SimpleReportForRequestId">
+   <report-query>
+         SELECT coalesce(service_plan, string_value) as service_plan , 
+	           coalesce(d.service_id, 'Assinatura') as d_service_id, 
+	           count(c.*) as ct_total_count
+          FROM bck_consequence c 
+          LEFT OUTER JOIN bck_related_om r ON r.consequence_id=c.uid 
+          LEFT OUTER JOIN inv_usage_detail d ON d.uid=r.om_uid 
+          LEFT OUTER JOIN bck_consequence_attr at ON (at.consequence_id=c.uid AND at.attr_key = 'ServiceId')
+          LEFT OUTER JOIN bck_consequence_string ats ON ats.uid=at.attr_uid
+         WHERE c.consequence_type in ('ServiceNotFound' , 'SubscriptionNotFound')
+           AND c.external_id = $P{PARAM_REQUEST_ID}
+	     GROUP BY service_plan, string_value, d.service_id
+         ORDER BY 1, 2
+   </report-query>
+   <images>
+       <image name="APPLICATION_LOGO" path="jasper/img/bc_logo.png"/>
+       <image name="COMPANY_LOGO"     path="jasper/img/auster_logo.png"/>
+       <image name="CUSTOMER_LOGO"    path="jasper/img/vivo_logo.png"/>
+   </images>
+   <virtualizer enabled="true" threshold="5000"/>
+</report-configuration>

@@ -1,0 +1,194 @@
+package br.com.auster.rules.vivo.R60;
+
+import br.com.auster.common.rules.GlobalForLog;
+import br.com.auster.common.lang.NamedHashMap;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.ChargedTax;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Receipt;
+import br.com.auster.om.invoice.ReceiptDetail;
+import br.com.auster.om.invoice.ServiceDetail;
+
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+global br.com.auster.billcheckout.param.TaxRateCache taxRateCache;
+
+function TelcoConsequence buildR60Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		Account account, String item, double value1, double value2, String format, String code, String description) {
+	consequenceBuilder.setRule(code, "Alíquota Indevida de ICMS na Nota Fiscal"); 
+	consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+	consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+	consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+	consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+	consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(account.getCarrierCode()));
+
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(description);
+	c.addAttribute("Tipo Cliente", account.getAccountType());
+	c.addAttribute("Estado Cliente", account.getAccountState());
+	c.addAttribute("Item", item);
+	c.addAttribute("Valor Item", ValueFormat.formatValue(value1));
+	c.addAttribute("Valor Calc.", ValueFormat.formatValue(value2));
+    return c;
+}
+
+// Validação de Imposto para Cliente Especial
+rule "Regra 60-1"
+	salience 5
+	when
+		$account : Account( 
+			$inv : invoice ,
+			accountType in ( "E", "G", "L" )
+		)		
+		$receipt : ReceiptDetail( invoice == $inv)
+		
+		$tax : ChargedTax(
+			taxAmount > 0,
+			taxName == "ICMS"
+		) from $receipt.taxes
+		
+	then
+		results.add(buildR60Consequence(dimensionCache, consequenceBuilder, $account,
+			$receipt.getCaption(), $tax.getTaxAmount(), 0.0, null,
+			"R60-1", "ICMS está sendo cobrado de cliente especial" ));
+end
+
+// Validação de Serviços Adicionais
+
+rule "Regra 60-2-1"
+	salience 5
+	when
+		$account : Account( 
+			accountState not in ("BA", "SE")
+		)
+		
+		$receipt : ReceiptDetail(
+			caption == "Serviços Adicionais",
+			$total1 : totalAmount
+		)
+		
+		$tax : ChargedTax(
+			taxAmount == 0,
+			taxName == "ICMS"
+		) from $receipt.taxes
+		
+		$total2 : Number() from accumulate (
+			ServiceDetail( 
+				elementType == "ADDITIONAL_SERVICES_DETAIL",
+				caption in (
+					"SEGURO",
+					"SEGURO CELULAR",
+					"SEGURO CELULAR I",
+					"SEGURO CELULAR II",
+					"SEGURO CELULAR III",
+					"SEGURO PESSOA JURIDICA",
+					"SEGURO PESSOA FISICA",
+					"SEGURO PRIMEIRA CLASSE"
+				),
+				$value : totalAmount
+			),
+			sum( $value )
+		)
+		
+		eval( $total1 != $total2.doubleValue() )
+	then
+		results.add(buildR60Consequence(dimensionCache, consequenceBuilder, $account,
+			$receipt.getCaption(), $total1, $total2.doubleValue(), null,
+			"R60-2", "Validação de Serviços Adicionais" ));
+end
+
+// Validação de Serviços Adicionais (Estados BA/SE)
+rule "Regra 60-2-2"
+	salience 5
+	when
+		$account : Account( 
+			accountState in ("BA", "SE")
+		)
+		
+		$receipt : ReceiptDetail(
+			caption == "Serviços Adicionais",
+			$total1 : totalAmount
+		)
+		
+		$tax : ChargedTax(
+			taxAmount == 0,
+			taxName == "ICMS"
+		) from $receipt.taxes
+		
+		$total2 : Number() from accumulate (
+			ServiceDetail( 
+				elementType == "ADDITIONAL_SERVICES_DETAIL",
+				caption in (
+					"SEGURO",
+					"SEGURO CELULAR",
+					"SEGURO CELULAR I",
+					"SEGURO CELULAR II",
+					"SEGURO CELULAR III",
+					"SEGURO PESSOA JURIDICA",
+					"SEGURO PESSOA FISICA",
+					"SEGURO PRIMEIRA CLASSE",
+					"PACOTE GESTAO LIGHT",
+					"PACOTE GESTAO COMPLETO",
+					"PACOTE GESTÃO CONTROLE CONSUMO",
+					"PACOTE GESTÃO CONTROLE DE CONSUMO"
+				),
+				$value : totalAmount
+			),
+			sum( $value )
+		)
+		eval( $total1 != $total2.doubleValue() )
+	then
+		results.add(buildR60Consequence(dimensionCache, consequenceBuilder, $account,
+			$receipt.getCaption(), $total1, $total2.doubleValue(), null,
+			"R60-3", "Validação de Serviços Adicionais" ));
+end
+
+rule "Regra 60-3"
+	salience 0 
+	when
+		$account : Account( 
+			#$state : accountState ,
+			accountType not in ( "E", "G", "L" ),			
+			$state : originalAccountState
+		)
+		
+		$receipt : Receipt( 
+			carrierState == $state
+		)
+		
+		
+		$detail : ReceiptDetail( 			
+			receipt == $receipt
+		)
+		
+		$tax : ChargedTax( 
+			taxName == "ICMS"
+		) from $detail.taxes
+				
+		eval( 
+			($tax.getTaxAmount() != 0 && $detail.getCaption() != "Serviços Adicionais") &&
+			taxRateCache != null &&
+			taxRateCache.getTaxRateByAlternateKey("Brasil", $receipt.getCarrierState(), $tax.getTaxName(), $detail.getFiscalCode()) != null &&
+			$tax.getTaxRate() != taxRateCache.getTaxRateByAlternateKey("Brasil", $receipt.getCarrierState(), $tax.getTaxName(), $detail.getFiscalCode()).getTaxRate()
+		)
+	then	
+		results.add(buildR60Consequence(dimensionCache, consequenceBuilder, 
+			$account, $detail.getCaption(), $tax.getTaxRate(),
+			taxRateCache.getTaxRateByAlternateKey("Brasil", $receipt.getCarrierState(), $tax.getTaxName(), $detail.getFiscalCode()).getTaxRate(), 
+			"#,##0.000000", "R60-4", "Aliquota de imposto inválida para item da nota" ));
+end
+

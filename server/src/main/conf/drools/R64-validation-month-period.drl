@@ -1,0 +1,158 @@
+package br.com.auster.rules.vivo.R64;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.common.lang.NamedHashMap;
+import java.util.Calendar;
+
+import br.com.auster.common.text.DateFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+
+
+//função que recebe o mês da data de inicio do ciclo (1023), transforma-o em Calendar, incrementa para comparar, parseString e retorna
+function String verifyMonth(int month){	
+	Calendar calendar = Calendar.getInstance();
+	//subtraindo -1 do mês usual (Jan-1 Dec-12) para adaptar a classe Calendar (Jan-0 a Dec-11)
+	calendar.set(calendar.MONTH, (month-1));  
+	//incrementa mês para comparação no eval
+	calendar.add(calendar.MONTH, 1);	
+	
+	//transforma em String antes de retornar e readapta o mês 0-11 da classe Calendar para o usual 1-12, adicionando 1			
+	String parseString = ("" + (calendar.get(calendar.MONTH)+1) );
+	
+	//Caso o mês seja de um dígito, ak acrescenta o "0" para comparar corretamente na .substring(4,6), se não dá erro,
+	//não podendo ser .substring(4,5) pois têm meses de dois dígitos
+	if (parseString.length()==1){
+			parseString="0" + parseString;			
+	}		
+	return parseString;
+}
+
+//função adiciona 1 dia na variavel monthCycleEndDate, para ter o retorno do campo de Emissao da fatura.
+function String formatDate(String monthCycleEndDate){
+	if(monthCycleEndDate != null && !monthCycleEndDate.equals("") && !monthCycleEndDate.equals(null)){
+		return DateFormat.format(String.valueOf(Integer.parseInt(monthCycleEndDate)+1), "yyyyMMdd", "dd/MM/yyyy");
+	} else {
+		return monthCycleEndDate;
+	}
+}
+
+//função para definição do relatório de consequência
+function TelcoConsequence buildR64Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 				 String carrier, String ruleNbr, String desc, String monthCycleEndDate, String monthBillingDate, 
+						 String periodInitialInvoice, String periodInitialCycle, String periodFinalInvoice,
+						 String periodFinalCycle, String monthPeriodInitialInvoice, String cycleCode) {
+		
+		//setando parâmetros padrões para a consequência
+		consequenceBuilder.setRule(ruleNbr, "Mês e Período da Fatura"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(carrier));
+		
+		//definindo os atributos que serão gerados na crítica
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription(desc);		
+		//os dois atributos abaixo para verificação do Mês de Referência
+		c.addAttribute("Ciclo", cycleCode);
+		c.addAttribute("Mês Referência Fatura", DateFormat.getMonth(monthCycleEndDate));		//mês data de final de ciclo (corte) - Referência
+		c.addAttribute("Mês Referência Processamento", DateFormat.getMonth(monthBillingDate)); //mês data de processamento		
+		//atributos abaixo para verificação de Período da Fatura
+		c.addAttribute("Dia Inicial Fatura", DateFormat.getDay(periodInitialInvoice ));		//Dia do período inicial da fatura
+		c.addAttribute("Dia Inicial Ciclo", DateFormat.getDay(periodInitialCycle));			//Dia do período inicial do ciclo
+		c.addAttribute("Dia Final Fatura", DateFormat.getDay(periodFinalInvoice));			//Dia do período final da fatura	
+		c.addAttribute("Dia Final Ciclo", DateFormat.getDay(periodFinalCycle));				//Dia do período final do ciclo
+		c.addAttribute("Mês Inicial Fatura", DateFormat.getMonth(monthPeriodInitialInvoice)); 	//mês data inicial de ciclo
+		c.addAttribute("Mês Final Fatura", DateFormat.getMonth(monthCycleEndDate));			//mês data de final de ciclo (corte) - Período
+		c.addAttribute("Emissão", formatDate(monthCycleEndDate));
+		c.addAttribute("Referência", DateFormat.format(monthCycleEndDate, "yyyyMMdd", "MM/yyyy"));
+		c.addAttribute("Período", DateFormat.format(monthBillingDate, "yyyyMMdd", "dd/MM/yy")+" a "+ DateFormat.format(monthCycleEndDate, "yyyyMMdd", "dd/MM/yy"));
+		
+  		return c;
+}
+/*
+   RULE #64: Validação Mês de Referência e Período da Fatura
+   Obs.: Para a data de validação da emissão de fatura não será efetuada, conforme E.T. 
+
+Cria o mapeamento de código do ciclo com correspondente dia de corte  */
+rule "R64-INIT"
+salience 60
+when
+	not (  NamedHashMap( name == "R64Period" ) )
+	Account ( $carrierCode : carrierCode )
+	Invoice ( $cycleStartDate : originalCycleStartDate,
+			  $cycleEndDate : originalCycleEndDate,
+			  $cycleCode : cycleCode )
+then
+	NamedHashMap cod = new NamedHashMap("R64Period");	
+    ######### INICIO DA PARAMETRIZAÇÃO #########	
+	cod.put("63","01"); 
+	cod.put("66","05");	
+	cod.put("71","09");	
+	cod.put("12","12");	
+	cod.put("78","16");	
+	cod.put("55","19");	
+	cod.put("56","22");	
+	######### FIM DA PARAMETRIZAÇÂO ############
+	
+	if (cod.get($cycleCode) == null) {
+		results.add(buildR64Consequence(dimensionCache,consequenceBuilder,$carrierCode,"R64-2", "Ciclo não cadastrado",
+        								 $cycleEndDate,"","","","","","",$cycleCode));         		
+	} else {
+		insert(cod); 	
+	}
+end
+
+rule "R64-1 Mês de referência"
+salience 0 	   			
+						
+	when   
+		Account ( $carrierCode : carrierCode )
+		Invoice ( $cycleEndDate : originalCycleEndDate,
+				  $billingDate  : originalIssueDate,       		
+				  $cycleCode		 : cycleCode, 
+				  
+				  eval (!originalIssueDate.substring(4,6).equals(originalCycleEndDate.substring(4,6)) )
+				)				 
+
+	then					
+        results.add(buildR64Consequence(dimensionCache,consequenceBuilder,$carrierCode,"R64-1", "Mês de referência inválido",
+        								 $cycleEndDate,$billingDate,"","","","","",$cycleCode));         		
+			
+end
+
+rule "R64-2 Período da Fatura"
+salience 0
+
+	when
+		$map : NamedHashMap( name == "R64Period" )
+		Account ( $carrierCode : carrierCode )
+		Invoice ( $cycleStartDate : originalCycleStartDate,
+				  $cycleEndDate : originalCycleEndDate,
+			      $cycleCode : cycleCode )
+		
+		eval ( !($cycleEndDate.substring(6,8).equals($map.get($cycleCode).toString())) || // periodo dia final
+		       !(Integer.parseInt($cycleStartDate.substring(6,8))== Integer.parseInt($map.get($cycleCode).toString())+1) || // periodo dia inicial
+		       !(verifyMonth(Integer.parseInt($cycleStartDate.substring(4,6))).equals($cycleEndDate.substring(4,6))) // mes do periodo
+		     ) 
+	then		
+		results.add(buildR64Consequence(dimensionCache,consequenceBuilder, $carrierCode, "R64-3","Período da Fatura inválido",
+    									$cycleEndDate,"", $cycleStartDate,
+    									"" + (Integer.parseInt($map.get($cycleCode).toString())+1), 
+    									$cycleEndDate, $map.get($cycleCode).toString(),
+    									$cycleStartDate, $cycleCode));          	 	
+end
+		

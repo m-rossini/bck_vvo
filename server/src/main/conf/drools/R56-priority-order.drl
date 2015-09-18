@@ -1,0 +1,136 @@
+package br.com.auster.rules.vivo.R56;
+
+import java.lang.Math;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Map;
+import java.util.HashMap;
+
+import br.com.auster.common.rules.GlobalForLog;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.OneTimeEventDetail;
+import br.com.auster.om.pricing.TaxCategory;
+import br.com.auster.om.pricing.TaxRate;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.om.invoice.UsageDetail;
+
+import br.com.auster.vivo.billcheckout.cache.vo.ContractBreakPenaltyVO;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoDimensionsFacade;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.vivo.billcheckout.cache.vo.PriorityOrderVO;
+
+import br.com.auster.common.text.DurationFormat;
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.cache.PriorityOrderServices dbservicesPO;
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.om.pricing.PricingFacade priceEngine;
+global java.util.List results; 
+
+
+function TelcoConsequence buildR56Consequence(DimensionCache dimensionCache, 
+		TelcoConsequenceBuilder consequenceBuilder, Account account, String ruleNbr, 
+		String desc, UsageDetail usage, String servWithPriority) {		
+	consequenceBuilder.setRule(ruleNbr,"Ordem da Prioridade de Consumo"); 
+	consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+	consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+	consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+	consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+	consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(account.getCarrierCode()));
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(desc);	    
+	c.addAttribute("Estado", usage.getCarrierState());
+	c.addAttribute("NomeDoServico", usage.getSvcPlan());
+	c.addAttribute("ServicoPrioritario", servWithPriority);
+	c.addAttribute("Ciclo", usage.getInvoice().getCycleCode());
+	c.addAttribute("Terminal", usage.getChannelId());
+	c.addAttribute("Subscrição", usage.getSection().getSubscriptionid());
+	c.addAttribute("Classe da Chamada", usage.getCallClass());
+	c.addAttribute("Operadora da Chamada", usage.getCarrierCode());
+	c.addAttribute("SubClasse da Chamada", usage.getCallSubclass());
+	c.addAttribute("Tipo de Tarifa", usage.getTariffClass());
+	c.addDateAttribute("Data Chamada", usage.getDatetime(), "dd/MM/yy");
+	c.addAttribute("Hora Chamada", DurationFormat.formatFromDate(usage.getDatetime()));
+	c.addAttribute("Duração Real Chamada", usage.getRealDuration());
+	c.addAttribute("Número Origem", usage.getChannelId());
+	c.addAttribute("Número Destino", ValueFormat.formatPhone(usage.getCalledNumber()));
+	c.addAttribute("Valor Chamada", ValueFormat.formatValue(usage.getTotalAmount()));	
+    return c;
+}
+
+//Regra 56-01
+rule "Regra 56-01"
+    when     
+    	$invoice  : Invoice($cycleCut : originalCycleEndDate,
+ 							$cycleStart : originalCycleStartDate )
+
+    	$section : Section(elementType == "SUBSCRIPTION_INFO",
+						   $chnlId : channelId,
+						   $subId : subscriptionid  )
+						    	
+		$usgList : ArrayList (size > 0)
+			from collect ( UsageDetail (channelId == $chnlId))
+    then
+    	//Se a variável é vazia então retorna
+    	if (dbservicesPO == null) { return; }
+    	
+        List priorities = dbservicesPO.getPriorityRecordsFor( "PriorityOrder", 
+        	new Object[] {$subId, $cycleCut, $cycleStart, $cycleCut, $cycleCut, $cycleStart, $cycleCut} );
+    	
+    	Collections.sort(priorities);
+    	
+    	// Percorre a lista de todos os PriorityOrderVO e procura por qualquer uso correspondente ao mesmo
+    	// Se encontrar, associa o primeiro uso a este PriorityOrderVO e marca como encontrado no SIRS
+    	for (Iterator it = priorities.iterator(); it.hasNext();) {
+    		PriorityOrderVO vo = (PriorityOrderVO) it.next();
+    		for (Iterator itUsg = $usgList.iterator(); itUsg.hasNext();) {
+	    		UsageDetail usg =  (UsageDetail) itUsg.next();
+	    		if (usg.getSvcPlan().equals(vo.getServiceName())) {
+					vo.setFirstUsageFound(usg);
+					vo.setFoundInSirs(true);
+					break;
+    			}
+    		}
+    	}
+
+    	// Neste momento será percorrida a lista de PriorityOrderVO (já ordenada) e será verificado
+    	// se algum deles desrespeita a regra de prioridade dos produtos.
+    	UsageDetail firstFoundWithPriority = null;
+    	long highestFound = -9999;
+    	boolean foundAtLeastOne = false;	
+    	for (Iterator it = priorities.iterator(); it.hasNext();) {
+    		PriorityOrderVO vo = (PriorityOrderVO) it.next();
+    		if (vo.isFoundInSirs()) {
+    			// Foi encontrado algum uso referente a este priority na etapa acima
+    		    highestFound = vo.getPriority();
+    		    foundAtLeastOne = true;
+    		    firstFoundWithPriority = vo.getFirstUsageFound();
+    		}
+    		else if (!vo.isFoundInSirs()) {
+    			// se não foi encontrado no SIRS porém um outro com prioridade maior existe no SIRS então critica.
+    			if (foundAtLeastOne && (highestFound > vo.getPriority())) {
+	    				results.add(buildR56Consequence(dimensionCache, consequenceBuilder, $invoice.getAccount(), 
+	    				"R56-01", "Consumo executado fora da ordem esperada.", firstFoundWithPriority, vo.getServiceName()));
+    			}
+    		}
+    	}
+
+
+end

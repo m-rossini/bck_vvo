@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project>
+
+	<modelVersion>4.0.0</modelVersion>
+
+	<name>Vivo Billcheckout EAR</name>
+	<description>Vivo Billcheckout Enterprise Archive</description>
+	<artifactId>vivo-billcheckout-ear</artifactId>
+	<groupId>vivo</groupId>
+	<packaging>ear</packaging>
+	<url>https://jean/sites/${pom.groupId}/${pom.artifactId}-${pom.version}/index.html</url>
+
+	<version>4.0.2</version>
+
+	<organization>
+		<name>Auster Solutions</name>
+		<url>http://www.auster.com.br</url>
+	</organization>
+	<issueManagement>
+		<system>Trac</system>
+		<url>https://extranet.auster.com.br/${pom.groupId}/billcheckout</url>
+	</issueManagement>
+
+	<repositories>
+		<!-- Auster Central Repository -->
+		<repository>
+			<id>auster</id>
+			<name>Auster Central Repository</name>
+			<url>http://jean/repository</url>
+			<layout>legacy</layout>
+		</repository>
+	</repositories>
+
+	<ciManagement>
+		<system>continuum</system>
+		<notifiers>
+			<notifier>
+				<type>mail</type>
+				<configuration>
+					<address>continuum@auster.com.br</address>
+				</configuration>
+			</notifier>
+		</notifiers>
+	</ciManagement>
+
+	<scm>
+		<connection>scm:svn:svn://continuum@jean/vivo/billcheckout/trunk/ear</connection>
+	</scm>
+
+	<distributionManagement>
+		<repository>
+			<id>auster-central-repo</id>
+			<name>Auster Central Repository</name>
+			<url>file:///repository/maven-env/central-repository</url>
+			<layout>legacy</layout>
+		</repository>
+		<site>
+			<id>local-site</id>
+			<url>file:///repository/documentation/sites/${pom.groupId}/${pom.artifactId}-${pom.version}/</url>
+		</site>
+	</distributionManagement>
+
+	<dependencies>
+		<!--    Auster LIBs    -->
+		<dependency>
+		  <artifactId>vivo-billcheckout-plugins</artifactId>
+		  <groupId>vivo</groupId>
+		  <version>4.0.1</version>
+		  <scope>provided</scope>
+		</dependency>
+		<dependency>
+		  <artifactId>vivo-billcheckout-web</artifactId>
+		  <groupId>vivo</groupId>
+		  <version>4.0.2</version>
+		  <scope>provided</scope>
+		  <type>war</type>
+		</dependency>		
+		<dependency>
+		  <artifactId>drools-jbrms-auster</artifactId>
+		  <groupId>org.drools</groupId>
+		  <version>4.0.3</version>
+		  <scope>provided</scope>
+		  <type>war</type>
+		</dependency>		
+		<!-- 3rd. party used libs -->
+		<dependency>
+		  <artifactId>log4j</artifactId>
+		  <groupId>log4j</groupId>
+		  <version>1.2.12</version>
+		  <scope>runtime</scope>
+		</dependency>
+		<dependency>
+		  <artifactId>datedFileAppender</artifactId>
+		  <groupId>minaret</groupId>
+		  <version>1.0.2</version>
+		  <scope>runtime</scope>
+		</dependency>
+	</dependencies>
+
+	<reporting>
+                <plugins>
+		<plugin>
+			<groupId>org.apache.maven.plugins</groupId>
+			<artifactId>maven-project-info-reports-plugin</artifactId>
+			<reportSets>
+				<reportSet>
+					<reports>
+						<!-- report>dependencies</report -->
+						<report>project-team</report>
+						<report>mailing-list</report>
+						<report>cim</report>
+						<report>issue-tracking</report>
+						<report>license</report>
+						<report>scm</report>
+					</reports>
+				</reportSet>
+			</reportSets>
+		</plugin>
+                </plugins>
+	</reporting>
+
+    <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-extensions</artifactId>
+        <groupId>auster</groupId>
+		<executions>
+		  <execution>
+			<id>build-zip</id>
+			<phase>package</phase>
+            <configuration>
+              <configurationFile>${basedir}/src/packaging/bundle.xml</configurationFile>
+              <artifactSeparator>:</artifactSeparator>
+              <tokenStart>@[</tokenStart>
+              <tokenEnd>]@</tokenEnd>
+            </configuration>
+            <goals>
+              <goal>prepare</goal>
+            </goals>
+          </execution>
+		</executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-antrun-plugin</artifactId>
+		<groupId>org.apache.maven.plugins</groupId>
+		<executions>
+		  <execution>
+		    <id>package-ear</id>
+			<phase>package</phase>
+            <configuration>
+			  <tasks>
+                <ant antfile="${basedir}/target/bundle.xml"/>
+			  </tasks>
+            </configuration>
+            <goals>
+              <goal>run</goal>
+            </goals>
+          </execution>
+		</executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-ear-plugin</artifactId>
+        <configuration>
+          <!-- configuring the application.xml descriptor file -->
+          <generateApplicationXml>false</generateApplicationXml>
+          <applicationXml>src/main/ear/application.xml</applicationXml>
+          <!-- defining all modules for this EAR -->
+  	  <defaultJavaBundleDir>APP-INF/lib</defaultJavaBundleDir>
+          <modules>
+            <javaModule>
+              <groupId>vivo</groupId>
+              <artifactId>vivo-billcheckout-plugins</artifactId>
+              <bundleFileName>billcheckout-ejb.jar</bundleFileName>
+              <bundleDir>/</bundleDir>
+            </javaModule>
+            <webModule>
+              <groupId>vivo</groupId>
+              <artifactId>vivo-billcheckout-web</artifactId>
+              <bundleDir>/</bundleDir>
+	      <bundleFileName>billcheckout-web.war</bundleFileName>
+            </webModule>
+            <webModule>
+		  				<artifactId>drools-jbrms-auster</artifactId>
+		  				<groupId>org.drools</groupId>
+              <bundleDir>/</bundleDir>
+	      			<bundleFileName>drools-jbrms-auster-4.0.3.war</bundleFileName>
+            </webModule>
+          </modules>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+
+</project>

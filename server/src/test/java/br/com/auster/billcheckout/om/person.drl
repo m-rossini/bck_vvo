@@ -1,0 +1,55 @@
+package br.com.auster.rules.testing;
+
+import br.com.auster.billcheckout.om.Person;
+import br.com.auster.billcheckout.om.PersonAddress;
+
+rule "Test01" 
+    no-loop true
+    when 
+        $p : Person( $pa : personAddress
+		)
+    then
+		System.out.println("Test01.Person Fisrt Name:" + $p + ".Person Address:" + $pa);         
+end
+
+rule "Test02"  
+    no-loop true
+    when 
+        $p : Person( 
+        	$pa : personAddress != null
+		)
+    then
+		System.out.println("Test02.Person Fisrt Name:" + $p + ".Person Address:" + $pa);         
+end
+
+rule "Test03"  
+    no-loop true
+    when 
+        $p : Person( 
+        	$pa : personAddress == null
+		)
+    then
+		System.out.println("Test03.Person Fisrt Name:" + $p + ".Person Address:" + $pa);         
+end
+
+rule "Test04"  
+    no-loop true
+    when 
+        $p : Person( 
+        	$fn : firstName,
+        	$p1 : firstName[2]
+		)
+    then
+		System.out.println("Test04.Person Fisrt Name:" + $fn + "." + $p1);         
+end
+
+rule "Test05"  
+    no-loop true
+    when 
+        $p : Person( 
+        	$fn : firstName,
+        	$p1 : firstName[2] == 'r'
+		)
+    then
+		System.out.println("Test05.Person Fisrt Name:" + $fn + "." + $p1);         
+end

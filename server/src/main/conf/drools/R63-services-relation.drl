@@ -1,0 +1,85 @@
+package br.com.auster.rules.vivo.R63;
+
+import br.com.auster.om.invoice.BarCode;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.om.invoice.Section;
+
+import java.util.Collection;
+import java.util.ArrayList;
+import java.util.Set;
+import java.util.Map;
+import java.util.Map.Entry;
+
+import br.com.auster.billcheckout.param.CallThresholdVO;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+import br.com.auster.vivo.billcheckout.cache.vo.DataBarnRerateFlagVO;
+import br.com.auster.vivo.billcheckout.caches.ServiceRelationCache;
+import br.com.auster.vivo.billcheckout.consequence.R63ConsequenceHelper;
+import br.com.auster.vivo.billcheckout.consequence.ServicePriceMissingException;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+
+import br.com.auster.common.rules.GlobalForLog;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+
+/**
+ * RULE R63 - Services relation
+ */
+rule "R63"
+	salience 0
+	when
+		$subsInfoSection : Section ( elementType  == "SUBSCRIPTION_INFO", $subId : subscriptionid )
+		$serviceSections : ArrayList() from collect (
+			Section (
+				elementType in ( "ACTIVATION_TOTAL", "ADDITIONAL_SERVICES_TOTAL" ),
+				subscriptionid == $subId
+			)
+		)
+		$serviceDetails : ArrayList() from collect (
+			ServiceDetail (
+				$section : section -> ( $serviceSections.contains($section) )
+			)
+		)
+	then
+		try {
+			Map<String, String> serviceNameMapping = null;
+			for (Entry<String, Set<String>> entry : ServiceRelationCache.getCannotHaveServices($serviceDetails).entrySet()) {
+				String service1 = entry.getKey();
+				for (String service2 : entry.getValue()) {
+					if (serviceNameMapping == null) {
+						serviceNameMapping = R63ConsequenceHelper.mapServiceNames($serviceDetails);
+					}
+					results.add(
+						R63ConsequenceHelper.createCannotHaveConsequence(
+							consequenceBuilder, dimensionCache,
+							"R63-01", "Produto X está ativo com produto Y indevidamente (cannot have)",
+							$subsInfoSection, serviceNameMapping, service1, service2));
+				}
+			}
+			for (Entry<String, Set<String>> entry : ServiceRelationCache.getMissingMustHaveServices($serviceDetails).entrySet()) {
+				if (serviceNameMapping == null) {
+					serviceNameMapping = R63ConsequenceHelper.mapServiceNames($serviceDetails);
+				}
+				results.add(
+					R63ConsequenceHelper.createMustHaveConsequence(
+						consequenceBuilder, dimensionCache,
+						"R63-02", "Produto ativo sem os produtos de sua convivência (must have)",
+						$subsInfoSection, serviceNameMapping, entry.getKey(), entry.getValue()));
+			}
+		} catch (ServicePriceMissingException e) {
+			GlobalForLog.log("WARN", "Subscricao " + $subId + " nao sera validada pela Regra 63 por faltar o ServicePrice do servico " + e.getMisconfiguredService());
+		}
+end

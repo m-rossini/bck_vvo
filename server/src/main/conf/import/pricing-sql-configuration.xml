@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+
+<sql-configuration 
+	pool-name="sql/billcheckoutdb">
+
+  <sql:configuration xmlns:sql="http://www.auster.com.br/common/sql/">
+	  <sql:database name="sql/billcheckoutdb"/>		
+  </sql:configuration> 
+	
+</sql-configuration>

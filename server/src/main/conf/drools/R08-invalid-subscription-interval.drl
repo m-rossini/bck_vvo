@@ -1,0 +1,460 @@
+package br.com.auster.rules.vivo.R08;
+
+import br.com.auster.common.rules.GlobalForLog;
+import br.com.auster.common.datastruct.RangeMap;
+import br.com.auster.common.lang.NamedHashMap;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.om.invoice.Section;
+
+import br.com.auster.vivo.billcheckout.caches.vo.SubscriptionServicesVO;
+import br.com.auster.vivo.billcheckout.caches.vo.AccountAndCycleChangeVO;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.vivo.billcheckout.util.SubscriptionTimeline;
+import br.com.auster.vivo.billcheckout.consequence.R08ConsequenceHelper;
+
+import java.lang.Long;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Map.Entry;
+import java.util.Iterator;
+import java.util.Date;
+
+import br.com.auster.common.text.ValueFormat;
+import br.com.auster.common.text.DateFormat;
+
+global java.util.List results;
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.vivo.billcheckout.caches.R08SubscriptionServices subscriptionServices;
+global br.com.auster.vivo.billcheckout.caches.R08SubscriptionPlan subscriptionPlan;
+global br.com.auster.vivo.billcheckout.caches.R08AccountAndCycleChange accountAndCycleChange;
+
+function boolean isExceptionService(String svcName) {
+	if (svcName == null) {
+		return false;
+	} else if (svcName.equals("ASSINATURA MENSAL - PLANO VIVO CONTROLE") ||
+			   svcName.equals("VIVOFLASH CONTROLE 100MB") ||
+			   svcName.equals("VIVOFLASH CONTROLE 250MB") ||
+			   svcName.equals("VIVOZAP CONTROLE 100MB") ||			   
+			   svcName.equals("VIVOZAP CONTROLE 50MB")) {
+		return true;
+	}
+	return false;
+}
+
+function void buildR08Consequence01(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 String ruleNbr, String desc, ServiceDetail svc, SubscriptionTimeline subTimeLine) {
+		
+		if (!isExceptionService(svc.getCaption())) {
+		    consequenceBuilder.setRule(ruleNbr, "Período de Cobrança de Mensalidades");
+		    consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		    consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		    consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		    consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+		    consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(svc.getInvoice().getAccount().getCarrierCode()));
+		    
+		    TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		    c.setDescription(desc);	
+		    c.addAttribute("Ciclo", svc.getInvoice().getCycleCode());
+		    c.addAttribute("NomeDoServico", svc.getCaption());
+		    c.addAttribute("Terminal", svc.getSection().getAccessNbr());
+		    c.addAttribute("Subscrição", svc.getSection().getSubscriptionid());
+		  	c.addAttribute("Tipo de Cobrança", (svc.getTotalAmount() >= 0) ? "Débito" : "Crédito");
+		  	c.addAttribute("Valor de Cobrança", ValueFormat.formatValue(svc.getTotalAmount()));
+		    c.addDateAttribute("Início Ciclo", subTimeLine.getCycleStartDate(), "dd/MM/yyyy");
+		    c.addDateAttribute("Fim do Ciclo", subTimeLine.getCycleEndDate(), "dd/MM/yyyy");
+		    c.addAttribute("Início do Bloqueio", "");
+		    c.addAttribute("Fim do Boqueio","");
+		    c.addAttribute("Ativação no Cadastro", "");
+		    c.addAttribute("Expiração no Cadastro", "");
+		    c.addAttribute("Período",  DateFormat.formatDate(svc.getStartDate(),"dd/MM/yy")+" a"+DateFormat.formatDate(svc.getEndDate(), "dd/MM/yy"));
+		    c.addDateAttribute("Início da Cobrança no SIRS", svc.getStartDate(), "dd/MM/yyyy");
+		    c.addDateAttribute("Fim da Cobrança no SIRS", svc.getEndDate(), "dd/MM/yyyy");
+		    c.addNullAttribute("Início do Período sem Cobrança");
+		    c.addNullAttribute("Fim do Período sem Cobrança");
+		    results.add(c);
+	    }
+}
+
+function void buildR08Consequence02(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 String ruleNbr, String desc, ServiceDetail svc, SubscriptionTimeline subTimeLine, SubscriptionServicesVO vo) {
+		
+		if (!isExceptionService(svc.getCaption())) {
+		    consequenceBuilder.setRule(ruleNbr, "Período de Cobrança de Mensalidades");
+		    consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		    consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		    consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		    consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+		    consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(svc.getInvoice().getAccount().getCarrierCode()));
+		    
+		    TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		    c.setDescription(desc);	
+		    c.addAttribute("Ciclo", svc.getInvoice().getCycleCode());
+		    c.addAttribute("NomeDoServico", svc.getCaption());
+		    c.addAttribute("Terminal", svc.getSection().getAccessNbr());
+		    c.addAttribute("Subscrição", svc.getSection().getSubscriptionid());
+		  	c.addAttribute("Tipo de Cobrança", (svc.getTotalAmount() >= 0) ? "Débito" : "Crédito");
+		  	c.addAttribute("Valor de Cobrança", ValueFormat.formatValue(svc.getTotalAmount()));
+		    c.addDateAttribute("Início Ciclo", subTimeLine.getCycleStartDate(), "dd/MM/yyyy");
+		    c.addDateAttribute("Fim do Ciclo", subTimeLine.getCycleEndDate(), "dd/MM/yyyy");
+		    c.addAttribute("Início do Bloqueio", "");
+		    c.addAttribute("Fim do Boqueio","");
+		    c.addDateAttribute("Ativação no Cadastro", vo.getSvcAgrmntEffDt(), "dd/MM/yyyy");
+		    c.addDateAttribute("Expiração no Cadastro", vo.getSvcAgrmntExpDt(), "dd/MM/yyyy");
+		     c.addAttribute("Periodo",  DateFormat.formatDate(svc.getStartDate(),"dd/MM/yy")+" a"+DateFormat.formatDate(svc.getEndDate(), "dd/MM/yy"));
+		    c.addDateAttribute("Início da Cobrança no SIRS", svc.getStartDate(), "dd/MM/yyyy");
+		    c.addDateAttribute("Fim da Cobrança no SIRS", svc.getEndDate(), "dd/MM/yyyy");
+		    c.addNullAttribute("Início do Período sem Cobrança");
+		    c.addNullAttribute("Fim do Período sem Cobrança");
+		    results.add(c);
+	    }
+}
+
+function void buildR08Consequence03(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 String ruleNbr, String desc, Account acc, SubscriptionTimeline subTimeLine, String accNbr, String subId, String planName,  Date startDate, Date endDate) {
+		
+		if (!isExceptionService(planName)) {
+		    consequenceBuilder.setRule(ruleNbr, "Período de Cobrança de Mensalidades");
+		    consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		    consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		    consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		    consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+		    consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(acc.getCarrierCode()));
+		    
+		    TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		    c.setDescription(desc);	
+		    c.addAttribute("Ciclo", acc.getInvoice().getCycleCode());
+		    c.addAttribute("NomeDoServico", planName);
+		    c.addAttribute("Terminal", accNbr);
+		    c.addAttribute("Subscrição", subId);
+		  	c.addAttribute("Tipo de Cobrança", "");
+		  	c.addAttribute("Valor de Cobrança", "");
+		    c.addDateAttribute("Início Ciclo", subTimeLine.getCycleStartDate(), "dd/MM/yyyy");
+		    c.addDateAttribute("Fim do Ciclo", subTimeLine.getCycleEndDate(), "dd/MM/yyyy");
+		    c.addAttribute("Início do Bloqueio", "");
+		    c.addAttribute("Fim do Boqueio","");
+		    c.addAttribute("Ativação no Cadastro", "");
+		    c.addAttribute("Expiração no Cadastro", "");
+		    c.addAttribute("Periodo",  "");
+		    c.addAttribute("Início da Cobrança no SIRS", "");
+		    c.addAttribute("Fim da Cobrança no SIRS", "");
+		     c.addAttribute("Periodo",  DateFormat.formatDate(startDate,"dd/MM/yy")+" a"+DateFormat.formatDate(endDate, "dd/MM/yy"));
+		    c.addDateAttribute("Início do Período sem Cobrança", startDate, "dd/MM/yyyy");
+		    c.addDateAttribute("Fim do Período sem Cobrança", endDate, "dd/MM/yyyy");
+		    results.add(c);
+		}
+}
+
+/**
+ * For each account, create a holder instance of class SubscriptionTimeline, 
+ * which will contain all information about subscription start/end dates, 
+ * charged in the current invoice.
+ */
+rule "Subscription INIT" 
+	salience 80
+	when
+		Invoice( $cycle : cycleCode,
+				 $startDate : cycleStartDate,
+				 $endDate : cycleEndDate,
+				 $originalEndDate : originalCycleEndDate,
+				 $originalStartDate : originalCycleStartDate)
+				 
+		Account( $accNbr : accountNumber)
+	then
+		insert(new SubscriptionTimeline($startDate, $endDate));
+		NamedHashMap map = new NamedHashMap("accountAndCycleChangeList");
+		insert(map);
+		
+		// Query 4 - Obtenção dos serviços e planos do cliente
+		List subscriptionServicesList = subscriptionServices.get($accNbr + "_" + $cycle + "_" + $originalEndDate + "_" + $originalStartDate);
+		map = new NamedHashMap("SubscriptionServicesList");
+		map.put($accNbr, subscriptionServicesList);
+		insert(map);
+end
+
+/**
+ * Attach the access number of each subscription in the Account.
+ */
+rule "AccessNumberList"
+	salience 75
+	when
+		$section : Section( elementType  == "SUBSCRIPTION_INFO",
+							$subId : subscriptionid )
+		$timeline : SubscriptionTimeline()
+		
+		$map : NamedHashMap (name == "accountAndCycleChangeList")
+		
+		Invoice ( $startDate : originalCycleStartDate,
+				 $endDate : originalCycleEndDate)
+	then
+		$timeline.addAccessNumber($section.getAccessNbr());	
+			
+		List accountAndCycleChangeList = accountAndCycleChange.get($subId + "_" + $endDate + "_" + $startDate);
+		$map.put($subId, accountAndCycleChangeList);
+end
+
+/**
+ * For each Subscription detail ("325D"), save the start 
+ * and end time information in the previously initialized 
+ * SubscriptionTimeline instance.
+ */
+rule "WrongSubscriptionDates"
+	salience 60
+	when
+		$sd : ServiceDetail( elementType == "ACTIVATION_DETAIL" , 
+			$dtEnd : endDate ,
+			$dtStart : startDate ,
+			endDateBeforeStartDate == true  )
+			
+		$timeline : SubscriptionTimeline()	
+	then
+		buildR08Consequence01(results, dimensionCache, consequenceBuilder, "R08-01", 
+						"Data de Fim de Assinatura MAIOR que Data de Início.", $sd, $timeline);
+end
+
+/**
+ * For each Subscription detail ("325D"), save the start 
+ * and end time information in the previously initialized 
+ * SubscriptionTimeline instance.
+ */ 
+rule "TimelineVerification"
+	salience 50
+	when
+		$sd : ServiceDetail( elementType == "ACTIVATION_DETAIL", starDateBeforeEndDate == true )
+		$timeline : SubscriptionTimeline()
+	then
+		if ($sd.getStartDate().before($timeline.getCycleStartDate()) || 
+			$sd.getStartDate().after($timeline.getCycleEndDate())) {
+			buildR08Consequence01(results, dimensionCache, consequenceBuilder, "R08-02", 
+						"Data de Início da Assinatura Fora do Período do Ciclo.", $sd, $timeline);
+		}
+
+		if ($sd.getEndDate().before($timeline.getCycleStartDate()) |
+			$sd.getEndDate().after($timeline.getCycleEndDate())) {
+			if (($sd.getServicePrice() != null) && (!("S".equals($sd.getServicePrice().getChargeType())))) {
+			buildR08Consequence01(results, dimensionCache, consequenceBuilder, "R08-03", 
+						"Data de Fim da Assinatura Fora do Período do Ciclo.", $sd, $timeline);
+			}		}
+
+		Date endDate = $sd.getEndDate();
+		if (endDate == null) {
+			endDate = $timeline.getCycleEndDate();
+		}
+		
+		$timeline.addSubscription( $sd.getSection().getAccessNbr(), 
+								   $sd.getStartDate().getTime(), 
+								   endDate.getTime(), 
+								   $sd );
+
+end
+
+
+
+// Seção 5.1.7 Período de Cobrança no SIRS divergente do período do serviço no cadastro do cliente.
+rule "R08-04/05" 
+	salience 40
+	when
+		$map : NamedHashMap (name == "SubscriptionServicesList")
+		$changeMap : NamedHashMap (name == "accountAndCycleChangeList")
+		
+		$sd : ServiceDetail(elementType  == "ACTIVATION_DETAIL" || == "ADDITIONAL_SERVICES_DETAIL",
+							$cap : caption )
+								
+		Account($accNbr : accountNumber)
+		
+		$timeline : SubscriptionTimeline()
+	then
+		AccountAndCycleChangeVO changeVo = R08ConsequenceHelper.getAccountAndCycleChange((List) $changeMap.get($sd.getSection().getSubscriptionid()), $accNbr,$sd.getInvoice().getCycleCode(),
+											$timeline.getCycleEndDate(), $timeline.getCycleStartDate());
+		
+		List<SubscriptionServicesVO> subscriptionServicesList = (List) $map.get($accNbr);
+		if ((subscriptionServicesList != null) && (subscriptionServicesList.size() > 0)) {
+
+			for (SubscriptionServicesVO vo : subscriptionServicesList) {
+				if (!vo.isFoundInSIRS()) {
+					if ($sd.getSection().getSubscriptionid().equals(vo.getSubId())) {
+						if ($sd.getCaption().equals(vo.getCapText())) {
+							
+							// Marca como encontrado no SIRS
+							vo.setFoundInSIRS(true);
+							
+							if ($sd.getTotalAmount() >= 0) { // totalAmount > 0 para ignorar créditos 
+							
+							
+							//Verificação se esse registro é referente a esta conta/ciclo:
+							if (changeVo != null) {
+								
+								// se a data de efetivacao da subscricao nesta conta/ciclo for posterior a data 
+								// de expiração deste serviço, entao ignora-o 
+								if ((changeVo.getSvcAsgmEffDt()) != null && (vo.getSvcAgrmntExpDt() != null) &&
+									(changeVo.getSvcAsgmEffDt().after(vo.getSvcAgrmntExpDt()))) {
+										continue;
+								}
+								
+								// se a data de expiracao da subscrição nesta conta/ciclo for anterior a
+								// de ativacao deste servico, entao ignora-o
+								if ((changeVo.getSvcAsgmExpDt()) != null && (vo.getSvcAgrmntEffDt() != null) &&
+									(changeVo.getSvcAsgmExpDt().before(vo.getSvcAgrmntEffDt()))) {
+										continue;
+								}
+								
+								if ((changeVo.getSvcAsgmExpDt() != null) && 
+									(((vo.getSvcAgrmntExpDt() != null) && (changeVo.getSvcAsgmExpDt().before(vo.getSvcAgrmntExpDt())))) ||
+									 (vo.getSvcAgrmntExpDt() == null)) {
+									vo.setSvcAgrmntExpDt(changeVo.getSvcAsgmExpDt());
+								}
+						
+								if ((changeVo.getSvcAsgmEffDt() != null) && 
+								     (((vo.getSvcAgrmntEffDt() != null) && (changeVo.getSvcAsgmEffDt().after(vo.getSvcAgrmntEffDt())))) ||
+								      (vo.getSvcAgrmntEffDt() == null)) {
+									vo.setSvcAgrmntEffDt(changeVo.getSvcAsgmEffDt());
+								}
+								
+							}
+
+								// Verificação da data inicial de cobrança
+								if ($sd.getStartDate().before(vo.getSvcAgrmntEffDt())) {
+									buildR08Consequence02(results, dimensionCache, consequenceBuilder, "R08-04", 
+										"Data de Início da Cobrança no SIRS anterior à Data de Início da Cobrança no DTBN", $sd, $timeline, vo);
+								}
+								
+								// Subtrai um dia da endDate pois a data de fim vai até as 23:59:59 do dia corrente
+								Date endDate = new Date($sd.getEndDate().getTime() - 86400000) ;
+								// verificação da Data final de cobrança
+								if (endDate.after(vo.getSvcAgrmntExpDt())) {
+									buildR08Consequence02(results, dimensionCache, consequenceBuilder, "R08-05", 
+										"Data de Fim da Cobrança no SIRS posterior à Data de Fim da Cobrança no DTBN", $sd, $timeline, vo);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+end
+
+/**
+ * RULE #08: Erro nos Intervalos de Cobrança de Assinatura
+ */ 
+rule "Regra 08-06"
+	salience 25
+	when
+		$account : Account($carrierCode : carrierCode)
+
+		$timeline : SubscriptionTimeline()
+	then
+    	Map overlaps = $timeline.hasOverlappingChargesAndCredits(false);
+	
+    	if (overlaps != null && overlaps.size() > 0) {
+      	Iterator it;
+    		for (it = overlaps.entrySet().iterator(); it.hasNext();) {
+    		    Map.Entry accNumber = (Map.Entry) it.next();
+
+    			Iterator serviceOverlapIt = ((Collection)accNumber.getValue()).iterator();
+    			while ( serviceOverlapIt.hasNext() ) {
+		    		ServiceDetail sd = (ServiceDetail) serviceOverlapIt.next();
+
+					buildR08Consequence01(results, dimensionCache, consequenceBuilder, "R08-06", 
+						"Sobreposição na cobrança de assinaturas.", sd, $timeline);
+		    	}
+			}
+		}
+end
+
+rule "Regra 08-07"
+	salience 25
+	when
+		$account : Account($carrierCode : carrierCode)
+		
+		$timeline : SubscriptionTimeline()
+		
+		$list : ArrayList ( size > 0 )
+              from collect(Section ( elementType == "SUBSCRIPTION_INFO"))
+		
+	then
+    	Map uncharged = $timeline.hasUnchargedPeriods(false);  	
+    	if (uncharged != null && uncharged.size() > 0) {
+			# Recuperando a lista de assinantes com lacunas nas cobranças de assinatura
+			  Iterator it;
+    		for (it = uncharged.entrySet().iterator(); it.hasNext();) {
+    		    Map.Entry accNumber = (Map.Entry) it.next();
+	    		Map times = (Map) accNumber.getValue();
+				# Recuperando a lista de intervalos sem cobrança de assinatura para o assinante corrente
+				  Iterator timesIt;
+	    		for (timesIt = times.entrySet().iterator(); timesIt.hasNext();) {
+	    			Map.Entry timesEntry = (Map.Entry) timesIt.next();
+	
+					Date startTime =  new Date(Long.parseLong((String) timesEntry.getKey()));
+					Date endTime = new Date(Long.parseLong((String) timesEntry.getValue()));
+					String accNbr = (String) accNumber.getKey();
+	    			String planName = new String();
+	    			String subId = new String();
+	    			 
+	    			// Procura a Seção correspondente ao número de acesso para buscar dados completares da crítica
+	    			Iterator secIt = $list.iterator();
+	    			while (secIt.hasNext()) {
+	    				Section sec = (Section) secIt.next();
+	    				if (sec.getAccessNbr().equals(accNbr)) {
+	    					planName = sec.getPlanName();
+	    					subId = sec.getSubscriptionid();
+	    				}
+	    			}
+	    			buildR08Consequence03(results, dimensionCache, consequenceBuilder, "R08-07", 
+						"Intervalo de tempo sem cobrança de assinaturas.", $account, $timeline, accNbr, subId, planName, startTime, endTime);
+		    	}
+	    	}
+    	}
+end
+
+// Cobrança de Mensalidade Inexistente
+rule "R08-10"
+	salience 25
+	when
+		$sec : Section ( elementType  == "SUBSCRIPTION_INFO" , 
+						 subscriptionIdEqualsToChannelId == false, 
+						 $line : accessNbr,
+						 $subId : subscriptionid  )
+
+		$timeline : SubscriptionTimeline( )
+		
+		Invoice($cycle : cycleCode,
+				$end : originalCycleEndDate,
+				$start : originalCycleStartDate,
+				$endDate : cycleEndDate,
+				$startDate : cycleStartDate  )
+
+		$account : Account($accNbr : accountNumber)
+		
+		// Verifica se há tráfego recuperado
+		exists ( UsageDetail( $datetime : datetime -> ($datetime.compareTo($startDate) >= 0)))
+
+	then
+		RangeMap map = $timeline.getChargesOfAccessNumber($line);    	
+    	if (map == null || map.getSize() <= 0) {
+			
+			// Execução da Query 1 da ET para verificar se o plano deve aparecer na fatura
+			String planName = subscriptionPlan.get($subId + "_" + $end + "_" + $start);
+			if (planName.length() != 0) {
+	   			buildR08Consequence03(results, dimensionCache, consequenceBuilder, "R08-08", 
+						"Intervalo de tempo sem cobrança de assinaturas.", $account, $timeline, $line, $subId, "", $startDate, $endDate);
+			}
+		}
+end

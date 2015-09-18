@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<project name="VIVO Cmdline Packaging" basedir="@[user.dir]@" default="override-jms-object">
+
+	<target name="override-jms-object">
+        <jar destfile="target/@[vivo:vivo-billcheckout-plugins]@"         
+			 update="true">
+           <zipfileset src="@[auster:dware-console-plugins]@">
+				<include name="br/com/auster/**/RequestCreation.class"/>
+				<include name="br/com/auster/**/RequestFinished.class"/>
+				<include name="br/com/auster/**/BillcheckoutReportRequest.class"/>
+
+				<include name="br/com/auster/**/FlowControlMessage.class"/>
+				<include name="br/com/auster/**/Stage.class"/>
+								
+		   </zipfileset>
+			
+           <zipfileset src="@[auster:data-aware-stubs]@"/>			
+           <zipfileset src="@[auster:minerva-interfaces]@"/>
+			
+           <zipfileset src="@[auster:request-base]@"
+                       includes="br/com/auster/**/model/**.class"/>
+           <zipfileset src="@[auster:web-request]@"
+                       includes="br/com/auster/**/model/**.class"/>
+           <zipfileset src="@[auster:security]@"
+                       includes="br/com/auster/**/*VO.class"/>
+        </jar>
+	</target>
+
+	
+</project>
+

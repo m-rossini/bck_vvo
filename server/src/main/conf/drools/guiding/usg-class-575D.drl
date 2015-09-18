@@ -1,0 +1,77 @@
+#package br.com.auster.rules.vivo;
+
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+
+global java.util.List results;
+global br.com.auster.billcheckout.param.SimpleObjectComparation adBagReference;
+global br.com.auster.billcheckout.param.SimpleObjectComparation adBagReferenceAC;
+
+#
+#  575D - Chamadas LONGA DISTANCIA Recebidas em Roaming
+#
+rule "575D DSL1 U" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( tag == "575D" , 
+                              caption == "DESLOCAMENTO1"
+                              )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_DSL1);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_UNIQUE);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());  
+        $usage.setCallAsRoaming();   
+        $usage.setCallAsLongDistance();  
+        $usage.setDetailCFOP("1190");             
+end
+
+rule "575D DSL2 U" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( tag == "575D", 
+                              caption == "DESLOCAMENTO2"
+                               )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_DSL2);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_UNIQUE);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());  
+        $usage.setCallAsRoaming();   
+        $usage.setCallAsLongDistance();  
+        $usage.setDetailCFOP("1190");             
+end
+
+rule "575D ADx U - Qualification" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+        					tag == "575D", 
+        					caption == "ADICIONAL",
+        					$ori : originState ,
+		        			$dst : destinationState
+                              )
+    then
+		String accState = $usage.getSection().getParentSection().getParentSection().getSubscriptionState();				
+		if ($dst.equals("")) {
+			$usage.setCallClass(ChecklistClasses.CALL_CLASS_AD3);
+		} else if (adBagReference.isValid(accState,$dst)) {
+			$usage.setCallClass(ChecklistClasses.CALL_CLASS_AD1);
+		} else {
+			$usage.setCallClass(ChecklistClasses.CALL_CLASS_AD2);			
+		}
+		
+		#Sets the sub types		
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_UNIQUE);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setCallAsRoaming();   
+        $usage.setCallAsLongDistance();               
+        $usage.setDetailCFOP("1190");
+end

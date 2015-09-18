@@ -1,0 +1,178 @@
+package br.com.auster.rules.vivo.R13;
+
+import java.util.List;
+import java.lang.Boolean;
+import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Map.Entry;
+import java.util.Iterator;
+import java.util.HashMap;
+import java.sql.ResultSet;
+
+import java.util.Calendar;
+import java.util.concurrent.atomic.AtomicLong;
+
+import java.lang.Double;
+import br.com.auster.common.rules.GlobalForLog;
+
+import br.com.auster.common.lang.NamedHashMap;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.pricing.ServicePrice;
+import br.com.auster.om.pricing.TaxCategory;
+import br.com.auster.om.pricing.TaxRate;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+
+import br.com.auster.common.text.ValueFormat;
+
+global java.util.List results;
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.vivo.billcheckout.cache.DataBarnQueryExecutor dtbnQueryExecutor;
+global br.com.auster.vivo.billcheckout.caches.R13ProgressiveDiscountsCache progressiveDiscountsCache;
+
+
+function void buildR13Consequence(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		String code, String description, ServiceDetail detail, ServicePrice price) {
+	
+		consequenceBuilder.setRule(code, "Tarifas de Mensalidade"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(detail.getInvoice().getAccount().getCarrierCode()));
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		
+		c.setDescription(description);
+		
+		TaxCategory taxCategory = null;
+		if (price != null) { taxCategory = price.getTaxCategory(); }
+		String taxCode = (taxCategory != null) ? taxCategory.getTaxCode() : "NULL";	
+		
+		TaxRate taxRate = null;
+		if (taxCategory != null) { taxRate = taxCategory.getTaxRate(detail.getInvoice().getAccount().getAccountState()); }
+		double taxValue = (taxRate != null) ? taxRate.getTaxRate() : 1;
+		
+		c.addAttribute("Ciclo", detail.getInvoice().getCycleCode());
+		c.addAttribute("NomeDoServico", detail.getCaption());
+		c.addAttribute("Terminal", detail.getSection().getAccessNbr());
+		c.addAttribute("Subscrição", detail.getSection().getSubscriptionid());
+		c.addAttribute("Estado da Subscrição", detail.getSection().getParentSection().getSubscriptionState());
+		c.addAttribute("Tipo de Cliente", detail.getInvoice().getAccount().getAccountType());	
+        c.addAttribute("Seq. Nbr.",detail.getSvcId());
+        if (price != null) {
+        	c.addAttribute("Negociado", price.isPriceNegotiated() ? "Sim" : "Não");
+        } else {
+        	c.addNullAttribute("Negociado");
+        }
+        c.addDateAttribute("Data Inicial", detail.getStartDate(), "dd/MM/yy");
+        c.addDateAttribute("Data Final", detail.getEndDate(), "dd/MM/yy");	
+        
+        c.addAttribute("Pro Rata",detail.isProRate() ? "Sim" : "Não");
+        c.addAttribute("Valor Calculado", ValueFormat.formatValue(detail.getCalculatedAmount()));
+        c.addAttribute("Valor Demonstrado", ValueFormat.formatValue(detail.getTotalAmount()));
+        c.addAttribute("Diferença", ValueFormat.formatValue((detail.getCalculatedAmount() - detail.getTotalAmount())));
+
+		if (price == null) {
+			c.addNullAttribute("Tipo");
+			c.addNullAttribute("Área");
+			c.addNullAttribute("Valor Inicial");
+			c.addNullAttribute("Valor Adicional");
+		} else {
+			c.addAttribute("Tipo",price.getChargeType());
+			c.addAttribute("Área",price.getPricingArea());
+			c.addAttribute("Valor Inicial", ValueFormat.formatValue(price.getInitCost()));
+			c.addAttribute("Valor Adicional", ValueFormat.formatValue(price.getStepCost()));	
+			
+		} 
+		c.addAttribute("Tax Code", taxCode);				                     
+		c.addAttribute("Valor Imposto", ValueFormat.formatValue(taxValue));		
+		                     
+        results.add(c);  	
+}
+
+rule "R13-01"
+	salience 0		
+	when
+		not NamedHashMap(name == "SplitBillingAccount") // exclude split billing accounts from validation
+	
+		Invoice ($end : originalCycleEndDate,
+			 	 $start: originalCycleStartDate) 
+		
+		$detail : ServiceDetail(elementType  == "ACTIVATION_DETAIL" || == "ADDITIONAL_SERVICES_DETAIL",
+				starDateBeforeEndDate == true, 
+				priceNegotiable == false,
+				servicePrice != null,
+				$price : servicePrice ,
+				eval(!$detail.getCaption().equalsIgnoreCase("ASSINATURA MENSAL - PLANO VIVO CONTROLE")),		
+				eval( (Math.abs($detail.getTotalAmount() - $detail.getCalculatedAmount() ) >= 0.02) 
+				     && (Math.abs($detail.getTotalAmount()) < 0.01))
+		)
+	then
+		String key = progressiveDiscountsCache.buildKey($detail.getSvcId(), $end, $start);
+		if (!progressiveDiscountsCache.get(key)) {
+			buildR13Consequence(results, dimensionCache, consequenceBuilder, "R13-01", 
+				"Tarifa de assinatura com valor zeros.", $detail, $price);
+		}
+end
+
+/***
+* R13-02 - Wrong Price. It is not ZERO and it IS Negotiable
+*/
+rule "R13-02"
+	salience 0		
+	when
+		not NamedHashMap(name == "SplitBillingAccount") // exclude split billing accounts from validation
+
+		Invoice ($end : originalCycleEndDate,
+			 	 $start: originalCycleStartDate) 
+				
+		$detail : ServiceDetail(elementType  == "ACTIVATION_DETAIL" || == "ADDITIONAL_SERVICES_DETAIL", 
+				starDateBeforeEndDate == true, 
+				servicePrice != null,
+				$price : servicePrice,
+				eval( (Math.abs($detail.getTotalAmount() - $detail.getCalculatedAmount() ) >= 0.02) 
+				     && (Math.abs($detail.getTotalAmount()) >= 0.02))
+			)
+	then
+		String key = progressiveDiscountsCache.buildKey($detail.getSvcId(), $end, $start);
+		if (!progressiveDiscountsCache.get(key)) {
+	    	buildR13Consequence(results, dimensionCache, consequenceBuilder, "R13-02", 
+	    		"Tarifa de assinatura incorreta.", $detail, $price);
+		}	    	
+end
+
+rule "R13-03"
+	salience 0		
+	when
+		not NamedHashMap(name == "SplitBillingAccount") // exclude split billing accounts from validation
+
+		Invoice ($end : originalCycleEndDate,
+			 	 $start: originalCycleStartDate) 
+
+		$detail : ServiceDetail(elementType  == "ACTIVATION_DETAIL" || == "ADDITIONAL_SERVICES_DETAIL",
+				starDateBeforeEndDate == true, 
+				servicePrice == null,
+				$price : servicePrice,
+				eval(!$detail.getCaption().equalsIgnoreCase("ASSINATURA MENSAL - PLANO VIVO CONTROLE"))	)		
+	then	
+		String key = progressiveDiscountsCache.buildKey($detail.getSvcId(), $end, $start);
+		if (!progressiveDiscountsCache.get(key)) {
+			buildR13Consequence(results, dimensionCache, consequenceBuilder, "R13-03", 
+	    		"Tarifa de assinatura não encontrada na tabela de tarifas.", $detail, $price);
+	    }
+end

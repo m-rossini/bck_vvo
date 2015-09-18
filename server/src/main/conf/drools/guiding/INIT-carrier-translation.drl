@@ -1,0 +1,50 @@
+#package br.com.auster.rules.vivo;
+
+import br.com.auster.om.invoice.SectionDetail;
+
+import br.com.auster.common.rules.GlobalForLog;
+
+global java.util.List results;
+
+function String transalteToCarrierCode(String operName) {
+		String results = "00";
+		
+		if (operName.equalsIgnoreCase("VIVO")) {return "00";}
+		if (operName.equalsIgnoreCase("CTBC")) {return "12";}
+		if (operName.equalsIgnoreCase("BRASIL TELECOM")) {return "14";}	
+		if (operName.equalsIgnoreCase("TELEFONICA")) {return "15";}		
+		if (operName.equalsIgnoreCase("TRANSIT")) {return "17";}		
+		if (operName.equalsIgnoreCase("EMBRATEL")) {return "21";}		
+		if (operName.equalsIgnoreCase("INTELIG")) {return "23";}				
+		if (operName.equalsIgnoreCase("GVT")) {return "25";}		
+		if (operName.equalsIgnoreCase("TELEMAR")) {return "31";}		
+		if (operName.equalsIgnoreCase("OI")) {return "33";}		
+		if (operName.equalsIgnoreCase("CLARO")) {return "36";}	
+		if (operName.equalsIgnoreCase("VIPER")) {return "38";}		
+		if (operName.equalsIgnoreCase("TIM")) {return "41";}
+		if (operName.equalsIgnoreCase("IMPSAT")) {return "45";}		
+		if (operName.equalsIgnoreCase("NEXUS")) {return "61";}		
+		if (operName.equalsIgnoreCase("TNL")) {return "98";}		
+			
+		return results;
+}
+	
+/**
+ */
+rule "INIT-CarrierTranslation" 
+	salience 94
+	when	
+	    $charge  : SectionDetail 
+		    (	elementType  == "MULTAS_JUROS_DETAIL"
+		    	,$cap : caption
+		    	, eval(!caption.startsWith("RESSARCIMENTO") ) 
+		    ) 
+	then
+		String[] tokens = $cap.split(" ", 2);
+		#GlobalForLog.log("INFO", "Translation:"  + $cap + ".SplittedSize:" + tokens.length);			
+		if (tokens.length == 2) {
+			String operName = tokens[1];
+			$charge.setCarrierCode(transalteToCarrierCode(operName));
+			#GlobalForLog.log("INFO", "Operator:"  + operName + ".NewCode:" + $charge.getCarrierCode());
+		}
+end 

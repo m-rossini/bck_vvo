@@ -1,0 +1,112 @@
+#created on: Feb 19, 2008
+#author anardo
+
+package br.com.auster.rules.vivo.R55;
+
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+
+import java.util.List;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.vivo.billcheckout.caches.R55NegotiableProductsCache;
+import br.com.auster.vivo.billcheckout.consequence.R55ConsequenceHelper;
+
+import br.com.auster.common.text.DateFormat;
+
+global java.util.List results;
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+
+global br.com.auster.vivo.billcheckout.caches.R55NegotiableProductsCache negotiableProductsCache;
+global br.com.auster.vivo.billcheckout.cache.DataBarnQueryExecutor dtbnQueryExecutor;
+
+function TelcoConsequence buildR55Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 				 String carrier, String ruleNbr, String desc, String numberAccount, String numberSubscription, 
+		 				 String numberChannelID, String state, String caption, String negot_eff, String negot_expr, 
+		 				 String negot_not, String sirs_seq_nbr, String dtbn_seq_nbr, String ativaDatePlan, String fimDatePlan,
+		 				 String cycle)
+		{
+		//setando parâmetros padrões para a consequência
+		consequenceBuilder.setRule(ruleNbr, "Produtos sem negociacao"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(carrier));
+		
+		//definindo os atributos que serão gerados na crítica
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription(desc);
+		//atributos para ambos - dados do SIRS
+		c.addAttribute("Ciclo" , cycle);
+		c.addAttribute("NomeDoServico", caption);
+		c.addAttribute("Id Produto", sirs_seq_nbr);
+		c.addAttribute("Estado", state);   
+		c.addAttribute("Conta", numberAccount);  
+		c.addAttribute("Subscricao", numberSubscription); 	
+		c.addAttribute("Terminal", numberChannelID); 
+		c.addAttribute("Data Ativa. Subscr.", DateFormat.format(ativaDatePlan, "yyyyMMdd", "dd/MM/yy"));
+		c.addAttribute("Data Expir. Subscr.", DateFormat.format(fimDatePlan, "yyyyMMdd", "dd/MM/yy")); 
+		c.addAttribute("Período", DateFormat.format(ativaDatePlan, "yyyyMMdd", "dd/MM/yyyy")+" a"+DateFormat.format(fimDatePlan, "yyyyMMdd", "dd/MM/yyyy"));
+		//dados recebidos do DTBN
+		c.addAttribute("Id Nao Negociado", dtbn_seq_nbr); 				    			
+		//atributo para erro na data inicial do período
+		c.addAttribute("Data Efetiv. Negociação", DateFormat.format(negot_eff, "yyyyMMdd", "dd/MM/yy"));	
+		//atributo para erro na data final do período
+		c.addAttribute("Data Expir. Negociação", DateFormat.format(negot_expr, "yyyyMMdd", "dd/MM/yy"));
+		//atributo para ambos
+		c.addAttribute("Data Sem Negociação", DateFormat.format(negot_not, "yyyyMMdd", "dd/MM/yy"));
+		 		
+  		return c;
+}
+
+rule "R55-01"
+salience 0
+	when
+		Account($accountCarrierCode : carrierCode, //uso padrão no carrierCode da consequencia
+				$nmbAccount			: accountNumber
+		)
+	
+		$detail : ServiceDetail(
+			tag in ("330D", "325D", "320D"), 
+			$caption : caption,								//String - Caption_Text - Plano
+			$svc_price_seq_nbr  : svcId,					//String - número de identificação do service_price
+			$activationDatePlan	: originalStartDate,		//String - data inicial cobrada do serviço na subscrição
+			$finishDatePlan		: originalEndDate			//String - data final cobrada do serviço na subscrição
+		)
+
+	then
+		String $subscr = $detail.getSection().getSubscriptionid();
+		
+		R55ConsequenceHelper helper = new R55ConsequenceHelper($svc_price_seq_nbr, $subscr, $activationDatePlan, $finishDatePlan, negotiableProductsCache, dtbnQueryExecutor);
+		helper.validateRule();
+		List<String> list = helper.getConsequence();
+
+		if (list!=null){
+			String estado = $detail.getSection().getParentSection().getSubscriptionState();
+			String terminal = $detail.getSection().getAccessNbr();
+			String $ciclo = $detail.getInvoice().getCycleCode();
+			for (int i=0;i<list.size(); i=i+4){ //i+4 pois existe 4 atribs. na lista retornada
+				if ( !(list.get(i+3).toString().equals("")) ){ //comparado o quarto atributo pois é o único que não estaria ""
+					results.add(buildR55Consequence(dimensionCache, consequenceBuilder, $accountCarrierCode, "R55-01",
+		 	   		    	"Produto sem negociacao", $nmbAccount, $subscr.toString(), terminal, estado, $caption,
+		 				 	list.get(i).toString(), list.get(i+1).toString(), list.get(i+2).toString(), $svc_price_seq_nbr,
+		 				 	list.get(i+3).toString(), $activationDatePlan, $finishDatePlan, $ciclo.toString() ));			
+				}else{ //não foi encontrado registro de negociações para este produto(caption) de negociação obrigatória
+					results.add(buildR55Consequence(dimensionCache, consequenceBuilder, $accountCarrierCode, "R55-02",
+		 	   		    	"Nenhuma negociacao para o Produto", $nmbAccount, $subscr.toString(), terminal, estado, $caption,
+		 				 	list.get(i).toString(), list.get(i+1).toString(), list.get(i+2).toString(), $svc_price_seq_nbr,
+		 				 	list.get(i+3).toString(), $activationDatePlan, $finishDatePlan, $ciclo.toString() ));			
+				 }
+			}
+		}
+end
+

@@ -1,0 +1,26 @@
+package br.com.auster.rules;
+
+import br.com.auster.common.rules.GlobalForLog;
+import br.com.auster.om.filter.request.BillcheckoutRequestWrapper;
+
+/*
+* Rule for Tests. This specific rule tests the DWARE Request Injection.
+*/
+rule "TEST-Request-Exists" 
+	salience 0
+	when	
+		$req : BillcheckoutRequestWrapper( 
+		)
+	then
+		GlobalForLog.log("INFO", "Request data:" + $req.getAttributes().get("dware.transactionid"));
+		System.out.println("Request data:" + $req.getAttributes().get("dware.transactionid"));
+end 
+
+rule "TEST-Request-Not-Exists" 
+	salience 0
+	when	
+		not ( BillcheckoutRequestWrapper() )
+	then
+		GlobalForLog.log("INFO", "Request not found.");
+		System.out.println("Request not found.");
+end 

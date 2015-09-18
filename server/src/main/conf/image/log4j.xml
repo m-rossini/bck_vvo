@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE log4j:configuration SYSTEM "conf/logging/log4j.dtd">
+<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/">
+
+	<appender name="FILE" class="biz.minaret.log4j.DatedFileAppender">
+		<param name="Threshold" value="TRACE"/>
+		<param name="Directory" value="/opt/Billc/log"/>
+		<param name="Prefix" value="image-boot-"/>
+		<param name="Suffix" value=".log"/>
+		<param name="Append" value="false"/>
+		<layout class="org.apache.log4j.PatternLayout">
+			<param name="ConversionPattern" value="%d{ABSOLUTE} %-5p [(%c(1) %t] %m%n"/>
+			<!-- param name="ConversionPattern" value="%d{ISO8601} %-5p [%t] - %m%n"/ -->
+		</layout>
+	</appender>
+
+	<root>
+		<priority value="INFO"/>
+		<appender-ref ref="FILE"/>
+	</root>
+</log4j:configuration>

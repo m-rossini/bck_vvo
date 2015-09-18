@@ -1,0 +1,552 @@
+#package br.com.auster.rules.vivo.R65;
+
+import java.util.Map;
+import java.lang.Math;
+import java.lang.Double;
+import java.lang.String;
+import java.util.HashMap;
+import java.util.Map.Entry;
+import java.util.ArrayList;
+import java.util.List;
+import br.com.auster.om.util.ParserUtils;
+import br.com.auster.om.invoice.ChargedTax;
+import br.com.auster.common.lang.NamedDouble;
+import br.com.auster.common.lang.NamedHashMap;
+import org.apache.commons.math.util.MathUtils;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Receipt;
+import br.com.auster.om.invoice.ReceiptDetail;
+import br.com.auster.om.invoice.FreeUnitsDetail;
+import br.com.auster.om.invoice.SubscriptionSummaryDetail;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+
+function ChargedTax getIcmsTax(Receipt receipt) {
+	return findTax(receipt, "ICMS");
+}
+
+function ChargedTax findTax(Receipt receipt, String taxName) {
+	List taxes = receipt.getTaxes();
+	for (int i = 0; i < taxes.size(); i++) {
+		ChargedTax tax = (ChargedTax) taxes.get(i);
+		if (taxName.equals(tax.getTaxName())) {
+			return tax;
+		}
+	}
+	return null;
+}
+
+function TelcoConsequence buildR65Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 				 String carrier, String ruleNbr, String desc, String cycle, String carrierName, String carrierCode,
+		 				 String carrierState, Double totalTagY, Double totalTagV, String tipoConta, Double aliquotaConta,
+		 				 String aliquotaDevida, Double somaBase, Double base, Double valorICMS, Double valorICMSSoma,
+		 				 Double valorIsento, Double valorIsentoSoma) {
+		
+		//setando parâmetros padroes para a consequência
+		consequenceBuilder.setRule(ruleNbr, "Sumario das Notas Fiscais"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(carrier));
+		
+		//definindo os atributos que serão gerados na crítica
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription(desc);
+		//atributos para ambas sub-regras
+		c.addAttribute("Ciclo", cycle);
+		c.addAttribute("Nome Operadora", carrierName);
+		c.addAttribute("Código Operadora", carrierCode);
+		c.addAttribute("Sigla Estado", carrierState);
+		//atributos para 65-02
+		if(totalTagY!=null && totalTagV!=null){
+			c.addAttribute("Total Itens", ValueFormat.formatValue(totalTagY));
+			c.addAttribute("Total Operadora", ValueFormat.formatValue(totalTagV));
+		}
+		c.addAttribute("Tipo Conta", tipoConta);	
+		c.addAttribute("Alíquota Conta", ValueFormat.formatAliquota(aliquotaConta));	
+		c.addAttribute("Alíquota Devida", ValueFormat.formatAliquota(aliquotaDevida));
+		c.addAttribute("Base Calculo", ValueFormat.formatValue(base));	
+		c.addAttribute("Base Calculo Soma", ValueFormat.formatValue(somaBase));			
+		c.addAttribute("Valor ICMS", ValueFormat.formatValue(valorICMS));	
+		c.addAttribute("Valor ICMS Soma", ValueFormat.formatValue(valorICMSSoma));	
+		c.addAttribute("Valor Isento", ValueFormat.formatValue(valorIsento));	
+		c.addAttribute("Valor Isento Soma", ValueFormat.formatValue(valorIsentoSoma));	
+  		return c;
+}
+
+function TelcoConsequence R65ConsequenceSecFour(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 				 String carrier, String ruleNbr, String desc, String cycle, String state, String tipoConta, 
+		 				 String phone, String plan250, String totalSubscr250, String plan300, String totalSubscr300,
+		 				 String nameShare, String totalShare, String somaShare) {
+		
+		//setando parâmetros padroes para a consequência
+		consequenceBuilder.setRule(ruleNbr, "Sumario das Notas Fiscais"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(carrier));
+		
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription(desc);
+		c.addAttribute("Ciclo", cycle);
+		c.addAttribute("Sigla Estado", state);
+		c.addAttribute("Tipo Conta", tipoConta);	
+		//para secao 5.4.1	
+		c.addAttribute("Terminal", ValueFormat.formatPhone(phone));
+		c.addAttribute("Plano Resumo", plan250);	
+		c.addAttribute("Plano Seção", plan300);
+		c.addAttribute("Total Subscr. Resumo", ValueFormat.formatValue(totalSubscr250));			
+		c.addAttribute("Total Subscr. Seção", ValueFormat.formatValue(totalSubscr300));
+		//para secao 5.4.2	
+		c.addAttribute("Nome Compartilham Resumo", nameShare);
+		c.addAttribute("Sub Tot. Compart. Resumo", ValueFormat.formatPoint(totalShare)); //subTotal do Resumo
+		c.addAttribute("Sub Soma Compart. Resumo", ValueFormat.formatPoint(somaShare)); //soma dos minutos utilizados
+
+  		return c;
+}
+
+rule "R65-INITIsento"
+salience 90
+when
+	not ( NamedHashMap(name == "R65-03-41") )
+	not ( NamedHashMap(name == "R65-03-42") )
+then
+	NamedHashMap map1 = new NamedHashMap("R65-03-41");
+	NamedHashMap map2 = new NamedHashMap("R65-03-42");
+	insert(map1);
+	insert(map2);
+end
+
+rule "R65-INITICMS"
+salience 90
+when
+	not (  NamedHashMap( name == "R65ICMS" ) )
+	not (  NamedHashMap( name == "R65-03-31" ) )
+	not (  NamedHashMap( name == "R65-03-32" ) )
+then
+	NamedHashMap icms = new NamedHashMap("R65ICMS");
+	NamedHashMap valueIcms = new NamedHashMap("R65-03-31");
+	NamedHashMap valueIcms2 = new NamedHashMap("R65-03-32");
+
+	icms.put("AC",25.0d);	
+	icms.put("AP",25.0d);	
+	icms.put("AM",25.0d);	
+	icms.put("DF",25.0d);	
+	icms.put("ES",25.0d);	
+	icms.put("RR",25.0d);	
+	icms.put("SC",25.0d);	
+	icms.put("SP",25.0d);	
+	icms.put("TO",25.0d);	
+	icms.put("RS",25.0d);	
+	icms.put("PR",27.0d);	
+	icms.put("MA",27.0d);	
+	icms.put("BA",27.0d);	
+	icms.put("SE",27.0d);	
+	icms.put("GO",29.0d);	
+	icms.put("GF",29.0d);	
+	icms.put("MS",29.0d);	
+	icms.put("RJ",30.0d);	
+	icms.put("MT",30.0d);	
+	icms.put("PA",30.0d);	
+	icms.put("RO",35.0d);	
+	//Novas CSA's
+	icms.put("AL",27.0d);
+	icms.put("CE",27.0d);
+	icms.put("PI",25.0d);
+	icms.put("PB",30.0d);
+	icms.put("PE",28.0d);
+	icms.put("RN",27.0d);
+	insert(icms);
+	insert(valueIcms);
+	insert(valueIcms2);
+end
+
+//Regra para validacao do Total da NF de cada operadora
+rule "R65-02"
+salience 0
+when
+	Account($accCarrierCode: carrierCode //uso padrão no carrierCode da consequencia
+	) 
+	
+	$receipt : Receipt(
+	 		$carrierCode   : carrierCode,
+	 		$carrierName   : carrierName,
+	 		$carrierState  : carrierState,
+	 		$cycle 		   : invoice.cycleCode,
+	 		$totalInvoice  : totalInvoiceAmount //Total da Operadora  
+	 )  
+	 
+	 $totalByCarrier : Double() from accumulate (
+								ReceiptDetail(tag in ("202Y"),
+									receipt.carrierName == $carrierName,
+									receipt.carrierCode == $carrierCode,
+									$amount202Y : totalAmount),
+								sum($amount202Y)
+	 )
+	 eval ( Math.abs(Math.round($totalInvoice*100)) != Math.abs(Math.round($totalByCarrier*100)) )	 
+then
+	results.add(buildR65Consequence(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-02", "Divergencia nos totais da operadora",
+				$cycle.toString(), $carrierName, $carrierCode, $carrierState, $totalByCarrier, $totalInvoice, "", null,"",
+				null,null,null,null,null,null));
+end
+
+//Validando aliquota de ICMS para contas não Governo
+rule "R65-03-1-1"
+salience 0
+when
+	Account($accCarrierCode: carrierCode //uso padrão no carrierCode da consequencia
+	)
+	
+	$map 	 : NamedHashMap( name == "R65ICMS" )
+	
+	$receipt : Receipt( $estado : carrierState,			//202Z
+			 	$cycleCode : invoice.cycleCode,
+			 	$operadora : carrierName,
+			 	$codeOperadora : carrierCode
+				)
+	
+	Invoice( $accountType : account.accountType not in ("E","G","B","L") )
+ 	
+ 	ChargedTax( 
+	  	tag in ("202V"),
+		$aliquota : taxRate //double			
+	 ) from $receipt.taxes
+then
+	if ($map.get($estado) == null) {
+		results.add(buildR65Consequence(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-03-1.1", "Estado não cadastrado",
+        								 $cycleCode.toString(),$operadora,$codeOperadora,$estado,null,null,
+        								 $accountType.toString(), null, "", null, null, null, null,null,null));  
+	} else {
+			if ($aliquota!=ParserUtils.getDouble($map.get($estado).toString())){ //mudar para != 0.0d
+				results.add(buildR65Consequence(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-03-1.2", 
+										 "Aliquota ICMS divergente", $cycleCode.toString(),$operadora,
+										 $codeOperadora,$estado,null,null, $accountType.toString(), $aliquota, 
+										 $map.get($estado).toString(), null, null, null, null,null,null)); 
+			}
+	  }	
+end
+
+//Validando aliquota ICMS para contas do Governo
+rule "R65-03-1-2"
+salience 0
+when
+	Account($accCarrierCode: carrierCode //uso padrão no carrierCode da consequencia
+	) 
+	$receipt : Receipt( $estado : carrierState,			//202Z
+			 	$cycleCode : invoice.cycleCode,
+			 	$operadora : carrierName,
+			 	$codeOperadora : carrierCode
+				)
+	
+	Invoice( $accountType : account.accountType in ("E","G","B","L") )
+ 	
+ 	ChargedTax( 
+	  	tag in ("202V"),
+		$aliquota : taxRate //double			
+	 ) from $receipt.taxes
+then
+	if ($aliquota > 0) { 
+		results.add(buildR65Consequence(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-03-1.3", "Aliquota ICMS divergente",
+        								$cycleCode.toString(),$operadora,$codeOperadora,$estado,null,null,$accountType.toString(),
+        								$aliquota,"0,00", null, null, null, null,null,null));  
+	} 
+end
+
+//Validando Base de Calculo
+rule "R65-03-2"
+salience 0
+	when
+		Account($accCarrierCode: carrierCode) //uso padrão no carrierCode da consequencia
+		$receipts : ArrayList() from collect ( ReceiptDetail() ) 	
+		$receipt  : ArrayList() from collect (Receipt() ) 	
+	then 
+		int index = 0;
+		double total = 0.0;
+		Double baseMap = 0.0;
+		Map<String, Double> map = new HashMap<String, Double>();
+		ReceiptDetail rd = new ReceiptDetail();
+		
+		for (ReceiptDetail receiptDetail : (ArrayList<ReceiptDetail>) $receipts) {
+			ChargedTax tax = (ChargedTax) receiptDetail.getTaxes().get(0); //pega valores do ICMS para 202Y
+			rd = (ReceiptDetail)$receipts.get( index < $receipts.size()-1 ? index+1 : ($receipts.size()-1) );			
+			
+			if ( receiptDetail.getReceipt().getCarrierName().equals(rd.getReceipt().getCarrierName() ) ) {
+				// add essa comparacao para cfop=1040 para somar o valor negativo do Desconto (Ponto de Atencao-ET)
+				if (tax.getTaxRate() > 0 || receiptDetail.getFiscalCode().equals("1040")){ 
+					total = total + receiptDetail.getTotalAmount();	
+				}	
+				map.put(receiptDetail.getReceipt().getCarrierName(), total);		
+			} else {
+					// add essa comparacao para cfop=1040 para somar o valor negativo do Desconto (Ponto de Atencao-ET)
+					if (tax.getTaxRate() > 0 || receiptDetail.getFiscalCode().equals("1040")){
+						total = total + receiptDetail.getTotalAmount();
+					}
+					map.put(receiptDetail.getReceipt().getCarrierName(), total);				
+					total=0;
+				}
+			index++;
+		}
+		
+		for (Receipt receipt : (ArrayList<Receipt>) $receipt) { //pega valores do Receipt
+			ChargedTax tax = getIcmsTax(receipt); //pega valores do ICMS para 202V
+			if (tax == null) {
+				continue;	// nao tem ICMS: ignora
+			}
+			baseMap = map.get(receipt.getCarrierName());
+			if ( baseMap != null && Math.abs(Math.round(tax.getTaxableAmount()*100)) != (Math.abs(Math.round(baseMap*100))) ){
+				results.add(buildR65Consequence(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-03-2", "Base de Calculo divergente",
+        					receipt.getInvoice().getCycleCode(),receipt.getCarrierName(),receipt.getCarrierCode(),
+        					receipt.getCarrierState(),null,null,receipt.getInvoice().getInvoice().getAccount().getAccountType(),
+        					null, "", map.get(receipt.getCarrierName()), tax.getTaxableAmount(),null,null,null,null));  
+			}
+		}
+end
+
+//Armazena Operadora/Valor ICMS
+rule "R65-03-3-1"
+salience 80
+when
+	$map31 : NamedHashMap( name == "R65-03-31" )
+	$receipt : Receipt( 
+		$carrier	 : carrierName   
+	)
+	ChargedTax( tag in ("202V"),
+		$valorICMS : taxAmount,
+		$aliquotaICMS : taxRate		
+	)from $receipt.taxes  
+then
+	$map31.put($carrier, $valorICMS); //map não deixa repetir key (Operadora)
+end
+
+//Valores do gasto X aliquota de cada 202Y e sua operadora
+rule "R65-03-3-2"
+salience 80
+when
+		$map32 : NamedHashMap( name == "R65-03-32" )
+		$map 	 : NamedHashMap( name == "R65ICMS" )
+		$receiptDetail : ReceiptDetail( 
+			$carrier	 : receipt.carrierName,  //202Z
+			$totalAmount : totalAmount,  //202Y
+			$cfop        : fiscalCode, 
+			$state       : receipt.carrierState
+		)
+		
+		ChargedTax( 
+			tag in ("202Y"),
+			$aliquota : taxRate, 	//double
+			$aliqXAmount : taxAmount			
+		)  from $receiptDetail.taxes  
+then
+	String operadora = $carrier.toString();
+	Double arredonda = MathUtils.round($aliqXAmount,2); //arredonda em 2 casas decimais após 5
+	//Se não existir operadora, ele cadastra com valor zero para existir todas operadoras mapeadas
+	if (!$map32.containsKey(operadora)){
+		$map32.put(operadora, 0d);
+	}
+	//se existe operadora no Map, soma e armazena
+	if ($map32.containsKey(operadora)){
+		//add essa comparacao para o caso do Ponto de Atencao-ET
+		if ($cfop.equals("1040")){
+			double aliquota = (Double)$map.get($state.toString()); 
+			double valorIcmsDesconto = MathUtils.round($totalAmount*(aliquota/100),2);
+			//Descontando(soma valor negativo) o valorIcms do Desconto - Ponto Atencao-ET
+			//Apesar de não somar qdo. aliquota é 0%, o que ocorre ak é que deve descontar o valor do Desconto do total
+			//dos tributáveis e se calcular. Assim, faço o inverso, já pegando o valorIcms cobrado do Desconto e subtraindo
+			//(soma valor negativo) do total.
+			$map32.put(operadora, ((Double)$map32.get(operadora) + valorIcmsDesconto) ); 
+		}	
+		else{
+			$map32.put(operadora, ((Double)$map32.get(operadora) + arredonda) );
+		}
+	}
+end
+
+//Match dos Maps para validação do campo Valor ICMS
+rule "R65-03-3"
+salience 0
+when
+	$map311 : NamedHashMap( name == "R65-03-31" )
+	$map322 : NamedHashMap( name == "R65-03-32" )
+	
+	Account(
+		$accCarrierCode : carrierCode, //uso padrão no carrierCode da consequencia
+		$estado : accountState,
+		$ciclo  : invoice.cycleCode,
+		$tipoConta: accountType
+	) 
+then
+	for (Object e1 : $map311.entrySet()) {
+		Entry entryM1 = (Entry) e1;	
+		Double valueMap1 = (Double)	entryM1.getValue(); //Valor ICMS do campo 202V
+		Double valueMap2 = (Double) $map322.get(entryM1.getKey()); //Valor ICMS somado em 202Y	
+
+		//Math.abs pega o valor sem o sinal +/-. Aqui,critica se a diferenca calculada for maior que 1
+		if ( Math.abs( Math.abs(Math.round(valueMap1*100)) - Math.abs(Math.round(valueMap2*100)) ) > 1 ){
+			results.add(buildR65Consequence(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-03-3", 
+										 "Valor ICMS divergente", $ciclo.toString(), entryM1.getKey().toString(),
+										 "", $estado, null, null, $tipoConta, null, 
+										 "", null, null,valueMap1, valueMap2, null, null)); 
+		}
+	}
+end
+
+//Popula Map contendo Operadora/Valor de Servs. Isentos - key=202V, start=251, size=14
+rule "R65-03-4-1"
+salience 80
+when
+	$map : NamedHashMap( name=="R65-03-41" )
+	$receipt : Receipt( 
+			$carrierName : carrierName,
+			$carrierCode : carrierCode
+	)
+	ChargedTax( 
+		tag in ("202V"),
+		$nonTaxableAmount : nonTaxableAmount
+	)from $receipt.taxes
+then
+	$map.put($carrierName,$nonTaxableAmount);
+end
+
+//Popula Map somando valores (R$) de aliquota=0.0, de cada item key=202Y, start=248, size=10 e acumulando total por Operadora
+rule "R65-03-4-2"
+salience 80
+when
+	$map2 	 : NamedHashMap( name == "R65-03-42" )
+	$receipt : ReceiptDetail( 
+		fiscalCode not in ("1040"), // Alteracao para Ponto De Atencao-ET, desconsidera somar quando cfop=1040-Descontos
+		$carrier	 : receipt.carrierName,
+		$totalAmount : totalAmount
+	)
+	ChargedTax( 
+		$aliquota : taxRate, 	//double			
+		$tag : tag
+	)from $receipt.taxes  //assim, so pegara valor de 202Y
+then
+	String operadora = $carrier.toString();
+	//Se não existir operadora, ele cadastra com valor zero para existir todas operadoras mapeadas
+	if (!$map2.containsKey(operadora)){
+		$map2.put(operadora, 0d);
+	}
+	//se existe operadora no Map e aliquota igual a zero soma e armazena
+	if ($map2.containsKey(operadora) && $aliquota==0d){
+		$map2.put(operadora, ((Double)$map2.get(operadora) + $totalAmount) );
+	}
+end
+
+//Match dos Maps para validação do campo Isentos/Nao Tributaveis
+rule "R65-03-4-Match"
+salience 0
+when
+	Account(
+		$accCarrierCode : carrierCode, //uso padrão no carrierCode da consequencia
+		$estado : accountState,
+		$ciclo  : invoice.cycleCode,
+		$tipoConta: accountType
+	) 
+	
+	$map1 : NamedHashMap( name == "R65-03-41" )
+	$map2 : NamedHashMap( name == "R65-03-42" )
+then
+	for (Object e1 : $map1.entrySet()) {
+		Entry entryM1 = (Entry) e1;	
+		Double valueMap1 = (Double)	entryM1.getValue(); //valor Isentos do campo 202V
+		Double valueMap2 = (Double) $map2.get(entryM1.getKey()); //valor Isentos somado	
+		
+		if ( Math.abs(Math.round(valueMap1*100)) != Math.abs(Math.round(valueMap2*100)) ){
+			results.add(buildR65Consequence(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-03-4-Match", 
+										 "Serv. Isentos/Nao Tributaveis divergente", $ciclo.toString(), entryM1.getKey().toString(),
+										 "", $estado,null,null, $tipoConta, null, 
+										 "", null, null,null,null, valueMap1, valueMap2)); 
+		}
+	}
+end
+
+//Validação da secao 5.4.1, Lista de números de acesso
+rule "R65-04-1"
+salience 10
+when
+	Account(
+		$accCarrierCode : carrierCode, //uso padrão no carrierCode da consequencia
+		$ciclo  : invoice.cycleCode,
+		$tipoConta : accountType,
+		$state : accountState
+	) 
+	$section300D : ArrayList() from collect (Section( elementType  == "SUBSCRIPTION_INFO" ))
+	$detail250SB : ArrayList() from collect (SubscriptionSummaryDetail(elementType == "SUBSCRIPTION_SUMMARY_DETAIL"))
+then
+	//informacoes da secao
+	for (Section section300D : (ArrayList<Section>) $section300D) {
+		boolean existsNbrPhone = false;
+		String phoneNumber300 = section300D.getChannelId();
+		String plan300 = section300D.getPlanName();
+		Double totalSubscr300 = section300D.getTotalAmount();
+
+		for (SubscriptionSummaryDetail detail250SB : (ArrayList<SubscriptionSummaryDetail>) $detail250SB) {
+			String phoneNumber250 = detail250SB.getChannelId();
+			String plan250 = detail250SB.getPlanName();
+			Double totalSubscr250 = detail250SB.getTotalAmount();
+			if (phoneNumber300.equals(phoneNumber250)){
+				if (!plan300.equals(plan250) || Math.abs(Math.round(totalSubscr300*100))!=Math.abs(Math.round(totalSubscr250*100))){
+					results.add(R65ConsequenceSecFour(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-04-1",
+						"Dados divergentes com resumo",$ciclo.toString(), $state, $tipoConta, phoneNumber250, 
+						plan250, totalSubscr250.toString(), plan300, totalSubscr300.toString(),"","",""));					
+				}				
+				existsNbrPhone=true;			
+			}
+		}
+		if (existsNbrPhone==false){
+			results.add(R65ConsequenceSecFour(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-04-2", 
+				"Terminal inexistente no resumo", $ciclo.toString(), $state, $tipoConta, phoneNumber300, "", "",
+				plan300, totalSubscr300.toString(),"","","")); 
+		}
+		existsNbrPhone=false;
+	}
+end
+
+//Validação do total da franquia compartilhamento
+rule "R65-04-2"
+salience 0
+when
+	Account(
+		$accCarrierCode : carrierCode,
+		$ciclo  : invoice.cycleCode,
+		$tipoConta : accountType,
+		$state : accountState
+	) 
+	$totalShare : Section(
+					elementType == "COMPARTILHAMENTO_FRANQUIA_TOTAL",
+					$shareName : caption,
+					$totalAmount : totalAmount
+				  )
+	$accumTotal : Double()
+					from accumulate (
+						FreeUnitsDetail(
+							elementType == "COMPARTILHAMENTO_FRANQUIA_DETAIL",
+							$minutes : usedUnits.minutes
+						) from $totalShare.getDetails(),
+						sum ($minutes)
+					)
+	eval (Math.abs($totalAmount*100 - $accumTotal*100) >= 0.015)
+then
+	results.add(R65ConsequenceSecFour(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-04-3",
+				"Dados da franquia divergentes no resumo",$ciclo.toString(), $state, $tipoConta, "", 
+				"", "", "", "", $shareName, String.valueOf($totalAmount), String.valueOf($accumTotal)));		
+end

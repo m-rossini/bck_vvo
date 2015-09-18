@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<project name="auster-billcheckout" default="server.run">
+
+    <property environment="env"/>
+    <property name="memory" value="10G"/>
+
+    <target name="server.run">
+
+    <path id="run.classpath">
+       <fileset dir="${basedir}/lib" includes="*"/>
+       <pathelement location="${basedir}/conf"/>
+     </path>
+
+     <java classname="br.com.auster.vivo.billcheckout.Bootstrap"
+          fork="yes"
+	   maxmemory="${memory}" 
+           dir="${basedir}">
+
+	<jvmarg value="-d64"/>
+        <jvmarg value="-Xms${memory}"/>
+        <jvmarg value="-server"/>
+	<!-- LWP thread model -->
+        <jvmarg value="-XX:+UseBoundThreads"/>
+	<!-- GC customization -->
+<!--
+        <jvmarg value="-XX:+UseParallelGC"/>
+        <jvmarg value="-XX:ParallelGCThreads=4"/>
+        <jvmarg value="-XX:SurvivorRatio=128"/>
+        <jvmarg value="-XX:YoungGenerationSizeIncrement=30"/>
+        <jvmarg value="-XX:AdaptiveSizeDecrementScaleFactor=10"/>
+        <jvmarg value="-XX:MaxPermSize=128m"/>
+        <jvmarg value="-XX:NewRatio=1"/>
+-->
+        <jvmarg value="-XX:+UseParallelGC"/>
+        <jvmarg value="-XX:MaxPermSize=196m"/>
+		 
+
+        <sysproperty key="app.name" value="bckSERVER"/>
+	<sysproperty key="java.endorsed.dirs"
+             value="${basedir}/lib/endorsed"/>
+        <sysproperty key="java.security.policy"
+                     value="etc/security.policy"/>
+        <sysproperty key="java.rmi.server.codebase"
+                     value="file://${rmi.base}"/>
+	    <sysproperty key="jdbc.drivers"
+			         value="org.apache.commons.dbcp.PoolingDriver:oracle.jdbc.driver.OracleDriver"/>
+			         
+	    <sysproperty key="com.sun.management.jmxremote"
+			         value="true"/>
+	    <sysproperty key="javax.management.builder.initial"
+			         value="mx4j.server.MX4JMBeanServerBuilder"/>
+	    <sysproperty key="com.sun.management.jmxremote.authenticate"
+			         value="false"/>
+	    <sysproperty key="com.sun.management.jmxremote.ssl"
+			         value="false"/>
+		 
+        <arg value="-x"/>
+        <arg value="conf/standalone.xml"/>
+        <arg value="-b"/>
+        <arg value="default"/>
+        <arg value="-a"/>
+        <arg value="{{sirs={{filenames=/opt/Billc/input/*.gz;transaction-id=6}}}}"/>
+ 	    <arg line="-s false"/>
+	    <arg line="-u 40000000"/>
+	    <arg line="-o ASC"/>
+        <classpath>
+           <path refid="run.classpath"/>
+        </classpath>
+     </java>
+
+    </target>
+    
+</project>

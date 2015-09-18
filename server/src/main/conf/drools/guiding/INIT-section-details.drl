@@ -1,0 +1,101 @@
+#package br.com.auster.rules.vivo;
+
+import br.com.auster.om.invoice.SectionDetail;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.om.invoice.OneTimeEventDetail;
+import br.com.auster.om.invoice.RedebitDetail;
+
+global java.util.List results;
+
+#
+#  
+#
+rule "Section Adesao" 
+    salience 90 
+    no-loop true
+    when 
+    	$s : ServiceDetail( elementType == "SUBSCRIPTION_SRV_CHARGE_DETAIL" )
+    then    
+        $s.setDetailCFOP("1020");
+end
+
+rule "Section Planos Contratados" 
+    salience 90 
+    no-loop true
+    when 
+    	$s : ServiceDetail( elementType == "ACTIVATION_DETAIL" )
+    then    
+        $s.setDetailCFOP("1010");
+end
+
+rule "Section Serviços Adicionais" 
+    salience 90 
+    no-loop true
+    when 
+    	$s : ServiceDetail( elementType == "ADDITIONAL_SERVICES_DETAIL" )
+    then    
+        $s.setDetailCFOP("1030");
+end
+
+rule "Section Descontos e Promocoes Account" 
+    salience 90 
+    no-loop true
+    when 
+    	$s : OneTimeEventDetail( elementType == "DISCOUNT_DETAIL" )
+    then    
+        $s.setDetailCFOP("1040");
+end
+
+rule "Section Descontos e Promocoes Subscription" 
+    salience 90 
+    no-loop true
+    when 
+    	$s : OneTimeEventDetail( elementType == "DiscountsDetail" )
+    then    
+        $s.setDetailCFOP("1040");
+end
+
+rule "Section Redebito Servicos" 
+    salience 90 
+    no-loop true
+    when 
+    	$s : RedebitDetail( elementType == "REDEBITO_SERVICOS_IMPUGNADOS_DETAIL" )
+    then    
+        $s.setDetailCFOP("1270");
+end
+
+rule "Section Redebito Chamadas" 
+    salience 90 
+    no-loop true
+    when 
+    	$s : RedebitDetail( elementType == "REDEBITO_CHAMADAS_IMPUGNADAS_DETAIL" )
+    then    
+        $s.setDetailCFOP("1270");
+end
+
+rule "Descontos e Promoções" 
+    salience 90 
+    no-loop true
+    when 
+    	$s : RedebitDetail( elementType == "PROMOTIONS_DETAIL" )
+    then    
+        $s.setDetailCFOP("1040");
+end
+
+rule "Section Mensagens Chamadas" 
+    salience 90 
+    no-loop true
+    when 
+    	$s : RedebitDetail( elementType == "REDEBITO_MENSAGENS_IMPUGNADAS_DETAIL" )
+    then    
+        $s.setDetailCFOP("1270");
+end
+
+rule "Section Dados" 
+    salience 90 
+    no-loop true
+    when 
+    	$s : RedebitDetail( elementType == "REDEBITO_DATA_2G_IMPUGNADAS_DETAIL" )
+    then    
+        $s.setDetailCFOP("1270");
+end

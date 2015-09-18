@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<project name="auster-invoice" default="run">
+
+    <property environment="env"/>
+
+    <target name="run">
+
+    <path id="run.classpath">
+        <fileset dir="${basedir}/lib" includes="*"/>
+        <pathelement location="${basedir}/conf"/>
+     </path>
+
+     <java classname="br.com.auster.vivo.billcheckout.ReportBootStrap" 
+           fork="yes"
+           maxmemory="2048M"
+           dir="${basedir}">
+
+        <jvmarg value="-d64"/>
+        <jvmarg value="-server"/>
+		<!-- LWP thread model -->
+        <jvmarg value="-XX:+UseBoundThreads"/>
+ 
+		<sysproperty key="br.com.auster.app.name"
+             value="BCKReport"/>
+
+        <sysproperty key="log4j.configuration" value="log4j.xml"/>
+        <sysproperty key="jdbc.drivers"
+	             value="org.apache.commons.dbcp.PoolingDriver:oracle.jdbc.driver.OracleDriver"/>
+        <sysproperty key="java.endorsed.dirs" value="${basedir}/lib/endorsed"/>
+		<arg line="${cmdline.args}"/>
+     	<arg line="-c ${basedir}/conf/configuration.xml"/>
+     	
+        <classpath>
+           <path refid="run.classpath"/>
+        </classpath>
+     </java>
+    </target>
+    
+</project>

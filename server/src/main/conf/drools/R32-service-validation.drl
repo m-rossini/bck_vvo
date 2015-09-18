@@ -1,0 +1,278 @@
+package br.com.auster.rules.vivo.R32;
+
+import br.com.auster.om.invoice.VoiceUsageDetail;
+import br.com.auster.om.invoice.ServiceDetail;
+import java.util.List;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+
+import br.com.auster.common.text.ValueFormat;
+import br.com.auster.common.text.DurationFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+global br.com.auster.billcheckout.param.SimpleObjectComparation adBagReferenceAC;
+global br.com.auster.billcheckout.param.SimpleObjectComparation adBagReference;
+global br.com.auster.vivo.billcheckout.caches.R32PlanService planService;
+
+function void buildR32Consequence01(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		String code, String description, VoiceUsageDetail usage) {
+
+		consequenceBuilder.setRule(code, "Demonstração na Seção Correta"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(usage.getInvoice().getAccount().getCarrierCode()));
+	
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription(description);
+		c.addAttribute("Ciclo", usage.getInvoice().getCycleCode());											
+		c.addAttribute("NomeDoServico", usage.getSvcPlan());										
+		c.addAttribute("Terminal", usage.getChannelId());
+		c.addAttribute("Subscrição", usage.getSection().getSubscriptionid());
+		c.addAttribute("Número Origem", usage.getChannelId());
+		c.addAttribute("Número Destino", ValueFormat.formatPhone(usage.getCalledNumber()));
+		c.addAttribute("Estado Origem", usage.getOriginState());
+		c.addAttribute("Estado Destino", usage.getDestinationState());
+		c.addAttribute("Código Área Origem", usage.getOriginCity());
+		c.addAttribute("Código Área Destino", usage.getDestinationCity());
+		c.addAttribute("Chave da Seção", usage.getTag());
+		c.addAttribute("Classe da Chamada", usage.getCallClass());
+		c.addAttribute("Sub Classe da Chamada", usage.getCallSubclass());
+		c.addDateAttribute("Data Chamada", usage.getDatetime(), "dd/MM/yy");
+		c.addAttribute("Hora Chamada", DurationFormat.formatFromDate(usage.getDatetime()));
+		c.addAttribute("Caption do Produto", "");
+		c.addAttribute("Valor Faturado", ValueFormat.formatValue(usage.getTotalAmount()));
+		results.add(c);  
+}
+
+function void buildR32Consequence02(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		String code, String description, ServiceDetail sd) {
+
+		consequenceBuilder.setRule(code, "Demonstração na Seção Correta"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(sd.getInvoice().getAccount().getCarrierCode()));
+	
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription(description);											
+		c.addAttribute("Ciclo", sd.getInvoice().getCycleCode());											
+		c.addAttribute("NomeDoServico", sd.getCaption());											
+		c.addAttribute("Terminal", sd.getSection().getAccessNbr());
+		c.addAttribute("Subscrição", sd.getSection().getSubscriptionid());
+		c.addAttribute("Número Origem", "");
+		c.addAttribute("Número Destino", "");
+		c.addAttribute("Estado Origem", "");
+		c.addAttribute("Estado Destino", "");
+		c.addAttribute("Código Área Origem", "");
+		c.addAttribute("Código Área Destino", "");
+		c.addAttribute("Chave da Seção", sd.getTag());
+		c.addAttribute("Classe da Chamada", "");
+		c.addAttribute("Sub Classe da Chamada", "");
+		c.addDateAttribute("Data Chamada", null);
+		c.addAttribute("Hora Chamada", null);
+		c.addAttribute("Caption do Produto", sd.getCaption());
+		c.addAttribute("Valor Faturado", ValueFormat.formatValue(sd.getTotalAmount()));
+		results.add(c);  
+}
+
+# VC1 em Home
+rule "Regra R32-01" 
+	salience 50
+	when
+		$usg : VoiceUsageDetail(tag == "510D",
+								objectType != "A",
+								callClass != ChecklistClasses.CALL_CLASS_VAS,
+								callSubclass not in (ChecklistClasses.CALL_SUBCLASS_555,
+													 ChecklistClasses.CALL_SUBCLASS_1234),
+								$originCity : originCity,
+								$detinationCity : destinationCity )
+
+ 	then
+ 		if ((adBagReferenceAC != null) && ($originCity.length() == 7) && ($detinationCity.length() == 7)) {
+ 			
+ 			// codigo de area da cidade de origem distinto do destino
+ 			if (!$originCity.substring(5,7).equals($detinationCity.substring(5,7))) { 
+ 				buildR32Consequence01(results, dimensionCache, consequenceBuilder, "R32-01", "VC1 em Home incorreto", $usg);
+ 			}
+ 		}
+end
+
+# VC1C em Home
+rule "Regra R32-01c" 
+	salience 50
+	when
+		$usg : VoiceUsageDetail(tag == "520D",
+								objectType != "A",
+								callSubclass not in (ChecklistClasses.CALL_SUBCLASS_555,
+													 ChecklistClasses.CALL_SUBCLASS_1234),
+								$originCity : originCity,
+								$detinationCity : destinationCity )
+								
+ 	then
+ 		if ((adBagReferenceAC != null) && ($originCity.length() == 7) && ($detinationCity.length() == 7)) {
+ 			
+ 			// codigo de area da cidade de origem distinto do destino
+ 			if (!$originCity.substring(5,7).equals($detinationCity.substring(5,7))) { 
+ 				buildR32Consequence01(results, dimensionCache, consequenceBuilder, "R32-01c", "VC1C em Home incorreto", $usg);
+ 			}
+ 		}
+end
+
+# VC2 em Home
+rule "Regra R32-02" 
+	salience 50
+	when
+		$usg : VoiceUsageDetail(tag == "535D",
+								objectType != "A",
+								callSubclass not in (ChecklistClasses.CALL_SUBCLASS_555,
+													 ChecklistClasses.CALL_SUBCLASS_1234),
+								$originCity : originCity,
+								$detinationCity : destinationCity )
+					
+ 	then
+		if ((adBagReferenceAC != null) && ($originCity.length() == 7) && ($detinationCity.length() == 7)) {
+	 
+	 		if (($originCity.substring(5,7).equals($detinationCity.substring(5,7))) || // codigo de area da cidade de origem igual do destino
+				(!adBagReferenceAC.isValid($originCity.substring(5,7), $detinationCity.substring(5,7)))) {// pertencem a grupos diferentes
+					buildR32Consequence01(results, dimensionCache, consequenceBuilder, "R32-02", "VC2 em Home incorreto", $usg);	  
+			}
+		}
+end
+
+# VC3 em Home
+rule "Regra R32-03" 
+	salience 50
+	when
+		$usg : VoiceUsageDetail(tag == "540D",
+								objectType != "A",
+								callSubclass not in (ChecklistClasses.CALL_SUBCLASS_555,
+													 ChecklistClasses.CALL_SUBCLASS_1234),
+								$originCity : originCity,
+								$detinationCity : destinationCity )
+								
+ 	then
+		if ((adBagReferenceAC != null) && ($originCity.length() == 7) && ($detinationCity.length() == 7)) {
+			
+			if (($originCity.substring(5,7).equals($detinationCity.substring(5,7))) || // codigo de area da cidade de origem igual do destino
+				(adBagReferenceAC.isValid($originCity.substring(5,7), $detinationCity.substring(5,7)))) { // pertencem a grupos iguais
+ 					buildR32Consequence01(results, dimensionCache, consequenceBuilder, "R32-03", "VC3 em Home incorreto", $usg);
+ 			}
+ 		}
+end
+
+# VC2C/VC3C em Home
+rule "Regra R32-04" 
+	salience 50
+	when
+		$usg : VoiceUsageDetail(tag == "545D",
+								objectType != "A",
+								callSubclass not in (ChecklistClasses.CALL_SUBCLASS_555,
+													 ChecklistClasses.CALL_SUBCLASS_1234),
+								$originCity : originCity,
+								$detinationCity : destinationCity )
+
+ 	then
+		if ((adBagReferenceAC != null) && ($originCity.length() == 7) && ($detinationCity.length() == 7)) {
+
+			// codigo de area da cidade de origem igual do destino
+			if ($originCity.substring(5,7).equals($detinationCity.substring(5,7))) { 
+	 			buildR32Consequence01(results, dimensionCache, consequenceBuilder, "R32-04", "VC2C/VC3C em Home incorreto", $usg);
+	 		}
+		} 		
+end
+
+# VC1/VC1C em Roaming
+rule "Regra R32-05" 
+	salience 50
+	when
+		$usg : VoiceUsageDetail(tag in ("555D","560D"),
+								objectType != "A",
+								caption != "ADICIONAL",
+								callClass == ChecklistClasses.CALL_CLASS_ADICIONAL,
+								callSubclass not in (ChecklistClasses.CALL_SUBCLASS_555,
+													 ChecklistClasses.CALL_SUBCLASS_1234),
+								$originCity : originCity,
+								$detinationCity : destinationCity )
+
+ 	then
+		if ((adBagReferenceAC != null) && ($originCity.length() == 7) && ($detinationCity.length() == 7)) {
+ 			
+ 			// codigo de area da cidade de origem igual do destino
+ 			if (!$originCity.substring(5,7).equals($detinationCity.substring(5,7))) { 
+ 				buildR32Consequence01(results, dimensionCache, consequenceBuilder, "R32-05", "VC1/VC1C em Roaming incorreto", $usg);
+ 			}
+ 		}
+end
+
+# VC2/VC2C/VC3/VC3C em Roaming
+rule "Regra R32-06" 
+	salience 50
+	when
+		$usg : VoiceUsageDetail(objectType != "A",
+								tag in ("570D","575D"),
+								callClass not in (ChecklistClasses.CALL_CLASS_DSL1,
+												  ChecklistClasses.CALL_CLASS_DSL2,
+												  ChecklistClasses.CALL_CLASS_ADICIONAL,
+												  ChecklistClasses.CALL_CLASS_AD1,
+												  ChecklistClasses.CALL_CLASS_AD2,
+												  ChecklistClasses.CALL_CLASS_AD1),
+								callSubclass not in (ChecklistClasses.CALL_SUBCLASS_555,
+													 ChecklistClasses.CALL_SUBCLASS_1234),
+								$originCity : originCity,
+								$detinationCity : destinationCity )
+								
+ 	then
+ 		if ((adBagReferenceAC != null) && ($originCity.length() == 7) && ($detinationCity.length() == 7)) {
+			
+			// codigo de area da cidade de origem igual do destino
+			if ($originCity.substring(5,7).equals($detinationCity.substring(5,7))) { 
+ 				buildR32Consequence01(results, dimensionCache, consequenceBuilder, "R32-06", "VC2/VC2C/VC3/VC3C em Roaming incorreto", $usg);
+ 			}
+ 		}
+end
+
+# Plano
+rule "Regra R32-07" 
+	salience 50
+	when
+		$sd : ServiceDetail(elementType == "ACTIVATION_DETAIL",	
+			 				$svcId : svcId)
+ 	then
+ 		if (planService != null) {
+	 		String svcFlag = planService.get($svcId);
+	 		if (svcFlag != null && !svcFlag.equals("Y")) {
+	 			buildR32Consequence02(results, dimensionCache, consequenceBuilder, "R32-07", "Serviço comum consta na seção de Plano", $sd);
+	 		}
+	 	}
+end
+
+# Plano
+rule "Regra R32-08" 
+	salience 50
+	when
+		$sd : ServiceDetail(elementType in ("SUBSCRIPTION_SRV_CHARGE_DETAIL", "ADDITIONAL_SERVICES_DETAIL"),	
+			 				$svcId : svcId)
+ 	then
+ 		if (planService != null) {
+	 	 	String svcFlag = planService.get($svcId);
+	 		if (svcFlag != null && svcFlag.equals("Y")) {
+	 			buildR32Consequence02(results, dimensionCache, consequenceBuilder, "R32-08", "Plano consta na seção errada", $sd);
+	 		}
+ 		}
+end

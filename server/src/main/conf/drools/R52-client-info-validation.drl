@@ -1,0 +1,312 @@
+package br.com.auster.rules.vivo.R52;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Iterator;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Address;
+import br.com.auster.om.invoice.Identity;
+
+import br.com.auster.common.rules.GlobalForLog;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoDimensionsFacade;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+
+import br.com.auster.vivo.billcheckout.cache.vo.DataBarnDirectDebitInfoVO;
+import br.com.auster.vivo.billcheckout.cache.vo.DataBarnClientGeneralInfoVO;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.vivo.billcheckout.cache.DataBarnDirectDebitInfoServices dataBarnDirectDebitInfoServices;
+global br.com.auster.vivo.billcheckout.cache.DataBarnClientGeneralInfoServices dataBarnClientGeneralInfoServices;
+global java.util.List results;
+
+//function to calculate the verification digit of an account number
+function int calculateVerificationDigit(String accountNumber) {
+
+	int [] multNums = {2,3,4,5,6,7,8,9};
+	char [] accNums = accountNumber.toCharArray();
+	int multResult = 0;
+	int calcVerificationDigit = 0;						
+			
+	for (int i = 0, j = 0, countDown = accNums.length; i < accNums.length; i++, j++, countDown--) {
+		if(j >= multNums.length) {					
+		j=0;
+		} 
+		multResult = Integer.parseInt(Character.toString(accNums[countDown-1])) * multNums[j] + multResult;
+	}
+		
+	calcVerificationDigit = 11 - (multResult % 11);
+		
+	if (calcVerificationDigit > 9) {
+  		calcVerificationDigit = 0;
+  	}				
+		
+	return calcVerificationDigit;								
+}
+
+//function to verify if an string is equal to another string
+function boolean verifyIfStringNotEquals(String fileStr, String databaseStr) {
+	if (fileStr == null && databaseStr == null) {
+		return false;
+	} else if (fileStr == null || databaseStr == null) {
+		return true;
+	} else {
+		return !fileStr.trim().equalsIgnoreCase(databaseStr.trim());
+	}
+}
+
+//function to verify if a substring belongs to another string
+function boolean verifyIfSubStrNotContainedInStr(String subStr, String str) {
+	if (subStr == null && str == null) {
+		return false;
+	} else if (subStr == null || str == null) {
+		return true;
+	} else {
+		return !str.contains(subStr.trim());
+	}
+}
+
+function void buildR52Consequence(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		String code, String description, Account acc, String dirDebitMsgInd, String accVerificationDigit,
+		String wrongAttributes, String sirsCustName, String dbCustName, String sirsAddress, String dbAddress,
+		String sirsIdType, String dbIdType, String sirsId, String dbId) {
+	
+		consequenceBuilder.setRule(code, "Dados Cadastrais do Cliente"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(acc.getCarrierCode()));
+	
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription(description);
+	    c.addAttribute("Conta", acc.getAccountNumber());			    
+	    c.addAttribute("Ciclo", acc.getInvoice().getCycleCode());
+	    c.addAttribute("Dígito Verificador Encontrado", dirDebitMsgInd);
+	    c.addAttribute("Dígito Verificador Calculado", accVerificationDigit);
+	    c.addAttribute("Atributos Incorretos", wrongAttributes);
+		c.addAttribute("Nome do Cliente no SIRS", sirsCustName);
+		c.addAttribute("Nome do Cliente do Databarn", dbCustName);
+		c.addAttribute("Endereço no SIRS", sirsAddress);
+		c.addAttribute("Endereço no Databarn", dbAddress);
+		c.addAttribute("Tipo ID no SIRS", sirsIdType);
+		c.addAttribute("Tipo ID no Databarn", dbIdType);
+		c.addAttribute("Nro. Documento no SIRS", sirsId);
+		c.addAttribute("Nro. Documento no Databarn", dbId);
+		results.add(c);  
+}
+
+
+rule "R52-1 Info de Debito Auto"
+
+	salience 0
+	
+	when
+	
+		$acc : Account($carrierCode : carrierCode)	
+		
+		$inv : Invoice( 
+			$directDebit : directDebit -> ($directDebit.equalsIgnoreCase("DIRCTDEBIT")),
+			account == $acc,
+			$dirDebitMsgInd : dirDebitMsgInd			
+		)		
+				
+    then      
+    
+       List<DataBarnDirectDebitInfoVO> list = dataBarnDirectDebitInfoServices.getDirectDebitInfo(
+				$acc.getAccountNumber(), $inv.getOriginalCycleEndDate(), $inv.getOriginalCycleStartDate());
+	
+	   TelcoConsequence c;
+		
+	   GlobalForLog.log("TRACE", "dataBarnClientGeneralInfoServices: "+dataBarnClientGeneralInfoServices);
+	   GlobalForLog.log("TRACE", "list: "+list);
+	   
+       if (list == null || list.isEmpty()) {                  
+		    
+		    buildR52Consequence(results, dimensionCache, consequenceBuilder, "R52-01", "Débito automático presente no SIRS e ausente no Databarn.", 
+		    					$acc , "", "", "", "", "", "", "", "", "", "", "");
+		    		        		
+       } else {
+       
+       		boolean accVerifDigitError = false;
+       		int accVerificationDigit = calculateVerificationDigit($acc.getAccountNumber());       		       	
+       		
+       		try {
+				accVerifDigitError = accVerificationDigit != Integer.parseInt($dirDebitMsgInd);		
+			} catch(NumberFormatException e) {
+				accVerifDigitError = true;
+			}
+				       
+       		if (accVerifDigitError) {
+	    
+			   	buildR52Consequence(results, dimensionCache, consequenceBuilder, "R52-01", 
+			   						"Dígito verificador da conta diverge do calculado.", $acc , 
+			   						$dirDebitMsgInd, Integer.toString(accVerificationDigit), "", "", "", "", "", "", "", "", "");
+       		}
+       		
+       }
+
+          
+end
+
+rule "R52-2 Dados Cadastrais"
+
+	salience 0
+	
+	when
+	
+		$acc : Account(
+			$carrierCode : carrierCode,
+			$customerName : accountName		
+		)	
+				
+		$inv : Invoice( 
+			account == $acc											
+		)		
+				
+    then      
+    
+        List<DataBarnClientGeneralInfoVO> list = dataBarnClientGeneralInfoServices.getClientGeneralInfo(
+				$acc.getAccountNumber(), $inv.getOriginalCycleEndDate(), $inv.getOriginalCycleStartDate());	   
+	    	    
+	    boolean customerNameErrorFound = false;
+	    boolean addressErrorFound = false;
+	    boolean identityTypeErrorFound = false;
+	    boolean identityNumberErrorFound = false;
+	    //string with all wrong attributes 
+	    String wrongAttributes = "";	    	    
+	    
+	    Address address = new Address();
+	    Identity identity = new Identity();
+	    	
+	    String customerName = $customerName.trim().replaceAll("  ", " ");
+	    	
+		GlobalForLog.log("TRACE", "customerName: "+customerName);
+		GlobalForLog.log("TRACE", "list: "+list);
+	    	
+		if (!list.isEmpty()) {
+		
+			DataBarnClientGeneralInfoVO dataBarnClientGeneralInfoVO = (DataBarnClientGeneralInfoVO)list.get(0);
+			
+			if(dataBarnClientGeneralInfoVO != null) {
+			
+				dataBarnClientGeneralInfoVO.setCustomerName(dataBarnClientGeneralInfoVO.getCustomerName().trim().replaceAll("  ", " "));
+				GlobalForLog.log("TRACE", "dataBarnClientGeneralInfoVO.getCustomerName(): "+dataBarnClientGeneralInfoVO.getCustomerName());
+				if (verifyIfSubStrNotContainedInStr(customerName, dataBarnClientGeneralInfoVO.getCustomerName().trim().replaceAll("  ", " "))){
+					customerNameErrorFound = true;
+					wrongAttributes+="Nome do Cliente" + ", ";														
+				}
+				
+				identity = null;
+				if(dataBarnClientGeneralInfoVO.getIdentityType().trim().contains("CPF")) {
+					GlobalForLog.log("TRACE", "dataBarnClientGeneralInfoVO.getIdentityType(): "+dataBarnClientGeneralInfoVO.getIdentityType());
+					address = (Address)$acc.getAddress("RESIDENCIAL");
+					identity = (Identity)$acc.getIdentity("CPF");
+				} else if(dataBarnClientGeneralInfoVO.getIdentityType().trim().contains("CNPJ")) {
+					address = (Address)$acc.getAddress("COMERCIAL");
+					identity = (Identity)$acc.getIdentity("CNPJ");
+				}
+				
+				if (address == null) {
+				    Map addressMap = $acc.getAddresses();
+				    if (addressMap != null && addressMap.size() > 0) {
+				    	Iterator it = addressMap.values().iterator();
+				    	if (it.hasNext()) {
+				    		address = (Address) it.next();
+				    	}
+				    }
+				}
+				
+				//if there is no object with the specified key, so we have a identity type error
+				if(identity==null) {
+					identityTypeErrorFound = true;
+					wrongAttributes+="Tipo de Identidade(CPF ou CNPJ)" + ", ";
+				} else {						
+					if (verifyIfStringNotEquals(identity.getIdentityNumber(), dataBarnClientGeneralInfoVO.getIdentityNumber())){
+						identityNumberErrorFound = true;								
+						wrongAttributes+="Número do " + identity.getIdentityType() + ", ";
+					}
+				}				
+				if (address != null &&
+					(verifyIfStringNotEquals(address.getAddressStreet().trim(),dataBarnClientGeneralInfoVO.getAddressStreetNum().trim()) ||
+					verifyIfStringNotEquals(address.getAddressComplement().trim(), dataBarnClientGeneralInfoVO.getAddressComplement().trim())||
+					verifyIfStringNotEquals(address.getNeighborhood().trim(), dataBarnClientGeneralInfoVO.getNeighborhood().trim()) ||
+					verifyIfStringNotEquals(address.getCity().trim(), dataBarnClientGeneralInfoVO.getPostalCityState().trim()))){
+					addressErrorFound = true;
+					wrongAttributes+="Endereço" + ", ";
+					GlobalForLog.log("TRACE", "address.getAddressStreet(): "+address.getAddressStreet());
+					GlobalForLog.log("TRACE", "address.getAddressComplement(): "+address.getAddressComplement());
+					GlobalForLog.log("TRACE", "address.getNeighborhood(): "+address.getNeighborhood());
+					GlobalForLog.log("TRACE", "address.getCity(): "+address.getCity());
+					GlobalForLog.log("TRACE", "dataBarnClientGeneralInfoVO.getIdentityType(): "+dataBarnClientGeneralInfoVO.getAddressStreetNum());
+					GlobalForLog.log("TRACE", "dataBarnClientGeneralInfoVO.getIdentityType(): "+dataBarnClientGeneralInfoVO.getAddressComplement());
+					GlobalForLog.log("TRACE", "dataBarnClientGeneralInfoVO.getIdentityType(): "+dataBarnClientGeneralInfoVO.getNeighborhood());
+					GlobalForLog.log("TRACE", "dataBarnClientGeneralInfoVO.getIdentityType(): "+dataBarnClientGeneralInfoVO.getPostalCityState());
+				}							
+			}		
+		
+			if (customerNameErrorFound || addressErrorFound || identityTypeErrorFound || identityNumberErrorFound){
+				
+				wrongAttributes = wrongAttributes.substring(0, wrongAttributes.length()-2);
+				
+			    String dbCustName = "";
+			    String sirsAddress = "";
+			    String dbAddress = "";
+			    String sirsIdType = "";
+			    String dbIdType = "";
+			    String sirsId = "";
+			    String dbId = "";
+		       
+			    dbCustName = dataBarnClientGeneralInfoVO.getCustomerName();
+
+
+			    if (address != null) {
+		    		sirsAddress = address.getAddressStreet().trim() + " " + address.getAddressComplement().trim() +  
+		    												 " " + address.getNeighborhood().trim() + " " + address.getCity().trim();
+		    	}
+		    	
+		    	dbAddress = dataBarnClientGeneralInfoVO.getAddressStreetNum().trim() + " " + dataBarnClientGeneralInfoVO.getAddressComplement().trim() +
+		    														" " + dataBarnClientGeneralInfoVO.getNeighborhood().trim() + " " + dataBarnClientGeneralInfoVO.getPostalCityState().trim();
+
+		    	if (identity != null) { sirsIdType = identity.getIdentityType(); }
+		    	dbIdType = dataBarnClientGeneralInfoVO.getIdentityType();
+				
+				if (identity == null) {
+				    Map identityMap = $acc.getIdentities();
+				    if (identityMap != null && identityMap.size() > 0) {
+				    	Iterator it = identityMap.values().iterator();
+				    	if (it.hasNext()) {
+				    		identity = (Identity) it.next();
+				    	}
+				    }
+				}
+				
+		    	if (identity != null) { sirsId = identity.getIdentityNumber(); }
+		    	dbId = dataBarnClientGeneralInfoVO.getIdentityNumber();
+   
+			    
+			  	buildR52Consequence(results, dimensionCache, consequenceBuilder, "R52-02", "Erro encontrado nos dados cadastrais do cliente.", 
+		    					    $acc , "", "", wrongAttributes, customerName, dataBarnClientGeneralInfoVO.getCustomerName(), 
+		    					    sirsAddress,dbAddress, sirsIdType, dbIdType, sirsId, dbId);
+		    		
+			}
+			
+		} else {
+			String sirsAddress = address.getAddressStreet().trim() + " " + address.getAddressComplement().trim() +  
+			    												 " " + address.getNeighborhood().trim() + " " + address.getCity().trim();
+
+		    buildR52Consequence(results, dimensionCache, consequenceBuilder, "R52-03", "Cadastro do cliente não encontrado no DataBarn.", 
+		    					    $acc , "", "", "", $customerName, "", sirsAddress, "", identity.getIdentityType(), "", identity.getIdentityNumber(), "");		
+		}
+          
+end

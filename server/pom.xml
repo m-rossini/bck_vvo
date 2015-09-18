@@ -1,0 +1,547 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project>
+
+	<modelVersion>4.0.0</modelVersion>
+
+	<name>Billcheckout Server for VIVO</name>
+	<description>This is the server portion of the Billcheckout solution implemented for VIVO</description>
+	<artifactId>vivo-billcheckout-server</artifactId>
+	<groupId>vivo</groupId>
+	<packaging>jar</packaging>
+	<url>https://jean/sites/${pom.groupId}/${pom.artifactId}-${pom.version}/index.html</url>
+
+	<version>4.3.11</version>
+
+	<organization>
+		<name>Auster Solutions</name>
+		<url>http://www.auster.com.br</url>
+	</organization>
+	<issueManagement>
+		<system>Trac</system>
+		<url>https://extranet.auster.com.br/${pom.groupId}/billcheckout</url>
+	</issueManagement>
+
+	<repositories>
+		<!-- Auster Central Repository -->
+		<repository>
+			<id>auster</id>
+			<name>Auster Central Repository</name>
+			<url>http://jean/repository</url>
+			<layout>legacy</layout>
+		</repository>
+	</repositories>
+
+	<ciManagement>
+		<system>continuum</system>
+		<notifiers>
+			<notifier>
+				<type>mail</type>
+				<configuration>
+					<address>continuum@auster.com.br</address>
+				</configuration>
+			</notifier>
+		</notifiers>
+	</ciManagement>
+
+	<scm>
+		<connection>scm:svn:svn://continuum@jean/vivo/billcheckout/trunk/server</connection>
+	</scm>
+
+	<distributionManagement>
+		<repository>
+			<id>auster-central-repo</id>
+			<name>Auster Central Repository</name>
+			<url>file:///repository/maven-env/central-repository</url>
+			<layout>legacy</layout>
+		</repository>
+		<site>
+			<id>local-site</id>
+			<url>file:///repository/documentation/sites/${pom.groupId}/${pom.artifactId}-${pom.version}/</url>
+		</site>
+	</distributionManagement>
+
+	<dependencies>
+		<!-- Logging -->
+		<dependency>
+			<artifactId>log4j</artifactId>
+			<groupId>log4j</groupId>
+			<version>1.2.13</version>
+		</dependency>
+		<dependency>
+			<artifactId>datedFileAppender</artifactId>
+			<groupId>minaret</groupId>
+			<version>1.0.2</version>
+		</dependency>
+
+		<dependency>
+			<artifactId>asm</artifactId>
+			<groupId>asm</groupId>
+			<version>1.5.3</version>
+		</dependency>
+
+		<dependency>
+			<artifactId>trove</artifactId>
+			<groupId>trove</groupId>
+			<version>1.1b4</version>
+		</dependency>
+		
+		<!-- Apache Commons libs. -->
+		<dependency>
+			<artifactId>commons-lang</artifactId>
+			<groupId>commons-lang</groupId>
+			<version>2.0</version>
+		</dependency>
+		<dependency>
+			<artifactId>commons-logging</artifactId>
+			<groupId>commons-logging</groupId>
+			<version>1.0.4</version>
+		</dependency>
+		<dependency>
+			<artifactId>commons-io</artifactId>
+			<groupId>commons-io</groupId>
+			<version>1.3.1</version>
+		</dependency>
+		<dependency>
+			<artifactId>commons-collections</artifactId>
+			<groupId>commons-collections</groupId>
+			<version>3.2</version>
+		</dependency>
+		<dependency>
+			<artifactId>commons-cli</artifactId>
+			<groupId>commons-cli</groupId>
+			<version>1.0</version>
+		</dependency>
+		<dependency>
+			<artifactId>commons-jxpath</artifactId>
+			<groupId>commons-jxpath</groupId>
+			<version>1.2</version>
+		</dependency>
+		<dependency>
+			<groupId>commons-dbcp</groupId>
+			<artifactId>commons-dbcp</artifactId>
+			<version>1.2.1</version>
+		</dependency>
+		<dependency>
+			<groupId>commons-pool</groupId>
+			<artifactId>commons-pool</artifactId>
+			<version>1.2</version>
+		</dependency>
+		<dependency>
+			<groupId>commons-math</groupId>
+			<artifactId>commons-math</artifactId>
+			<version>1.1</version>
+		</dependency>
+
+		<!-- FOP -->
+		<dependency>
+			<groupId>fop</groupId>
+			<artifactId>fop</artifactId>
+			<version>0.20.5</version>
+		</dependency>
+		<dependency>
+			<groupId>avalon-framework</groupId>
+			<artifactId>avalon-framework</artifactId>
+			<version>4.1.4</version>
+		</dependency>
+		<dependency>
+			<groupId>batik</groupId>
+			<artifactId>batik-1.5-fop</artifactId>
+			<version>0.20-5</version>
+		</dependency>
+	
+		<!-- XML Handling -->
+		<dependency>
+			<artifactId>xalan</artifactId>
+			<groupId>xalan</groupId>
+			<version>2.7.0</version>
+		</dependency>
+		<dependency>
+			<artifactId>xerces</artifactId>
+			<groupId>xerces</groupId>
+			<version>2.4.0</version>
+		</dependency>
+		<dependency>
+			<artifactId>xml-apis</artifactId>
+			<groupId>xml-apis</groupId>
+			<version>1.0.b2</version>
+		</dependency>
+		<dependency>
+			<artifactId>ant</artifactId>
+			<groupId>ant</groupId>
+			<version>1.6.5</version>
+		</dependency>
+
+		<!--  DROOLS DEPENDENCIES -->
+		<dependency>
+			<groupId>org.drools</groupId>
+			<artifactId>drools-core</artifactId>
+			<version>4.0.4</version>
+		</dependency>
+		<dependency>
+			<groupId>org.eclipse</groupId>
+			<artifactId>core</artifactId>
+			<version>3.2.3.686</version>
+		</dependency>
+		<dependency>
+			<groupId>org.drools</groupId>
+			<artifactId>drools-compiler</artifactId>
+			<version>4.0.4</version>
+		</dependency>
+		<dependency>
+			<groupId>antlr</groupId>
+			<artifactId>antlr-runtime</artifactId>
+			<version>3.0</version>
+		</dependency>
+		<dependency>
+			<groupId>mvel</groupId>
+			<artifactId>mvel14</artifactId>
+			<version>1.2.21</version>
+		</dependency>
+
+		<!-- Hibernate Dependencies -->
+		<dependency>
+			<groupId>org.hibernate</groupId>
+			<artifactId>hibernate</artifactId>
+			<version>3.1.2</version>
+			<exclusions>
+				<exclusion>
+					<groupId>antlr</groupId>
+					<artifactId>antlr</artifactId>
+				</exclusion>
+			</exclusions>				
+		</dependency>
+		<dependency>
+			<groupId>dom4j</groupId>
+			<artifactId>dom4j</artifactId>
+			<version>1.6.1</version>
+		</dependency>
+		<dependency>
+			<groupId>cglib</groupId>
+			<artifactId>cglib</artifactId>
+			<version>2.1_3</version>
+		</dependency>
+		<dependency>
+			<groupId>odmg</groupId>
+			<artifactId>odmg</artifactId>
+			<version>3.0</version>
+		</dependency>
+		<dependency>
+			<groupId>ehcache</groupId>
+			<artifactId>ehcache</artifactId>
+			<version>1.1</version>
+		</dependency>
+		
+		<!-- Auster implementations -->
+		<dependency>
+			<groupId>auster</groupId>
+			<artifactId>auster-commons-data</artifactId>
+			<version>2.0.1</version>
+		</dependency>
+
+		<dependency>
+			<groupId>auster</groupId>
+			<artifactId>auster-commons-asm</artifactId>
+			<version>2.0.1</version>
+		</dependency>
+
+		<dependency>
+			<groupId>asm</groupId>
+			<artifactId>auster-asm</artifactId>
+			<version>2.2.2</version>
+		</dependency>
+
+		<dependency>
+			<groupId>javax.jms</groupId>
+			<artifactId>jms</artifactId>
+			<version>1.1</version>
+		</dependency>
+	    <dependency>
+	      <groupId>javamail</groupId>
+	      <artifactId>javamail</artifactId>
+	      <version>1.3.2</version>
+	      <scope>provided</scope>
+	    </dependency>
+		<dependency>
+			<groupId>auster</groupId>
+			<artifactId>dware-console-plugins</artifactId>
+			<version>2.6.5</version>
+			<exclusions>
+				<exclusion>
+					<groupId>auster</groupId>
+					<artifactId>om-filter</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>auster</groupId>
+					<artifactId>om-invoice</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>auster</groupId>
+					<artifactId>om-util</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>auster</groupId>
+					<artifactId>om-reference</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>auster</groupId>
+					<artifactId>backported-billcheckout</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>auster</groupId>
+			<artifactId>billcheckout</artifactId>
+			<version>4.0.8</version>
+		</dependency>
+		<dependency>
+			<groupId>auster</groupId>
+			<artifactId>dware-console-listeners</artifactId>
+			<version>2.5.2</version>
+		</dependency>
+		<dependency>
+			<groupId>auster</groupId>
+			<artifactId>auster-commons-base</artifactId>
+			<version>2.6.8</version>
+		</dependency>
+		<dependency>
+			<groupId>auster</groupId>
+			<artifactId>data-aware</artifactId>
+			<version>1.10.4</version>
+		</dependency>
+		<dependency>
+			<groupId>auster</groupId>
+			<artifactId>udd</artifactId>
+			<version>1.2.6</version>
+		</dependency>
+		<dependency>
+			<artifactId>request-base</artifactId>
+			<groupId>auster</groupId>
+			<version>1.2.2</version>
+		</dependency>
+		<dependency>
+			<artifactId>web-request</artifactId>
+			<groupId>auster</groupId>
+			<version>1.2.6</version>
+		</dependency>
+
+		<dependency>
+			<artifactId>data-aware-stubs</artifactId>
+			<groupId>auster</groupId>
+			<version>1.8.0</version>
+		</dependency>
+		<dependency>
+			<artifactId>productreport</artifactId>
+			<groupId>auster</groupId>
+			<version>1.0.2</version>
+		</dependency>
+		
+		<!-- File handler -->
+		<dependency>
+			<groupId>vivo</groupId>
+			<artifactId>sirs-tools</artifactId>
+			<version>1.8.5</version>
+		</dependency>
+
+		<!--  OM -->
+		<dependency>
+			<groupId>auster</groupId>
+			<artifactId>om-core</artifactId>
+			<version>4.1.2</version>
+		</dependency>
+
+		<!-- runtime dependencies -->
+		<dependency>
+			<groupId>groovy</groupId>
+			<artifactId>groovy-all</artifactId>
+			<version>1.5.4</version>
+		</dependency>
+		<dependency>
+			<groupId>oracle</groupId>
+			<artifactId>oracle-jdbc4</artifactId>
+			<version>10.2.0</version>
+		</dependency>
+		<dependency>
+			<groupId>jug</groupId>
+			<artifactId>jug-asl</artifactId>
+			<version>2.0.0</version>
+		</dependency>
+		<dependency>
+			<groupId>bea</groupId>
+			<artifactId>weblogic</artifactId>
+			<version>9.2.0</version>
+		</dependency>
+
+		<!--  MX4J - JMX Monitoring  -->
+		<dependency>
+			<artifactId>mx4j</artifactId>
+			<groupId>mx4j</groupId>
+			<version>3.0.1</version>
+		</dependency>
+
+		<dependency>
+			<artifactId>mx4j-remote</artifactId>
+			<groupId>mx4j</groupId>
+			<version>3.0.1</version>
+		</dependency>
+
+		<dependency>
+			<artifactId>mx4j-tools</artifactId>
+			<groupId>mx4j</groupId>
+			<version>3.0.1</version>
+		</dependency>
+
+		<!--  needed by resume and checkpoint implementations -->
+	    <dependency>
+	      <groupId>sun</groupId>
+	      <artifactId>FastInfoset</artifactId>
+	      <version>1.0.2</version>
+	    </dependency>
+		<dependency>
+		  <groupId>com.thoughtworks.xstream</groupId>
+		  <artifactId>xstream</artifactId>
+	 	  <version>1.2.2A</version>
+		</dependency>
+			<dependency>
+			<groupId>xpp3</groupId>
+			<artifactId>xpp3_min</artifactId>
+			<version>1.1.3.4.O</version>
+		</dependency>
+	</dependencies>
+	<!--
+		Reports configuration
+	-->
+	<reporting>
+		<plugins>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>taglist-maven-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-checkstyle-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>surefire-report-maven-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>jxr-maven-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-pmd-plugin</artifactId>
+				<configuration>
+					<rulesets>
+						<ruleset>/rulesets/basic.xml</ruleset>
+						<ruleset>/rulesets/controversial.xml</ruleset>
+					</rulesets>
+					<format>xml</format>
+					<linkXref>true</linkXref>
+					<sourceEncoding>utf-8</sourceEncoding>
+					<minimumTokens>100</minimumTokens>
+				</configuration>
+			</plugin>
+			<!-- This customization is needed due to bug MPIR-19 (http://jira.codehaus.org/browse/MPIR-19) -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-project-info-reports-plugin</artifactId>
+				<reportSets>
+					<reportSet>
+						<reports>
+							<!-- report>dependencies</report -->
+							<report>project-team</report>
+							<report>mailing-list</report>
+							<report>cim</report>
+							<report>issue-tracking</report>
+							<report>license</report>
+							<report>scm</report>
+						</reports>
+					</reportSet>
+				</reportSets>
+			</plugin>
+
+		</plugins>
+	</reporting>
+
+	<build>
+		<!--
+			Javadoc generation configuration
+		-->
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<excludes>
+						<exclude>**/TestGuidingRules.java</exclude>
+					</excludes>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<source>1.5</source>
+					<target>1.5</target>
+				</configuration>
+			</plugin>
+			<plugin>
+				<artifactId>maven-extensions</artifactId>
+				<groupId>auster</groupId>
+				<executions>
+					<execution>
+						<id>obsfuscate-n-shrink</id>
+						<phase>package</phase>
+						<configuration>
+							<configurationFile>${basedir}/src/packaging/proguard.po</configurationFile>
+						</configuration>
+						<goals>
+							<goal>proguard</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>prepare-distribuition</id>
+						<phase>package</phase>
+						<configuration>
+							<configurationFile>${basedir}/src/packaging/bundle.xml</configurationFile>
+						</configuration>
+						<goals>
+							<goal>prepare</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<artifactId>maven-antrun-plugin</artifactId>
+				<groupId>org.apache.maven.plugins</groupId>
+				<executions>
+					<execution>
+						<id>run-bundling-script</id>
+						<phase>package</phase>
+						<configuration>
+							<tasks>
+								<ant antfile="${basedir}/target/bundle.xml" />
+							</tasks>
+						</configuration>
+						<goals>
+							<goal>run</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<configuration>
+					<destDir>/repository/documentation/sites/${pom.groupId}/${pom.artifactId}-${pom.version}/jdocs/</destDir>
+					<linksource>true</linksource>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>
+

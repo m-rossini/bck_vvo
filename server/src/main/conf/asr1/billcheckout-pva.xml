@@ -1,0 +1,154 @@
+<?xml version = "1.0" encoding = "UTF-8"?>
+
+<data-aware>
+
+	<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/">
+			
+		<appender name="FILE" class="biz.minaret.log4j.DatedFileAppender">
+			<param name="Threshold" value="DEBUG"/>
+			<param name="Directory" value="/opt/Billc/log"/>
+			<param name="Prefix" value="pva-"/>
+			<param name="Suffix" value=".log"/>
+			<param name="Append" value="false"/>
+			<layout class="org.apache.log4j.PatternLayout">
+				<param name="ConversionPattern" value="%d{ABSOLUTE} %-5p [(%c{1}) %t] %m%n"/>
+			</layout>
+		</appender>
+		
+		<root>
+			<priority value="INFO"/>
+			<appender-ref ref="FILE"/>		
+		</root>
+	</log4j:configuration>
+
+	<sql:configuration xmlns:sql="http://www.auster.com.br/common/sql/">
+		<sql:database name="sql/billcheckoutdb"/>		
+	</sql:configuration> 
+	
+	<requests:configuration xmlns:requests="http://www.auster.com.br/dware/requests/">					
+		<builder name="sirs" class-name="br.com.auster.dware.request.file.FileRequestBuilder">
+			<config bufferSize="262244" encoding="ISO-8859-1" maxRecordSize="2048">
+				<record-key position="110" length="5" trim="false" new-request-pattern=" 010D" />
+				<request-key record-key-pattern=" 010D">
+					<field name="key" position="1" length="15" type="java.lang.String" />
+				</request-key>
+				<record key=" 010D">
+					<field name="account" position="1" length="15"/>
+					<field name="cycle.id" position="152" length="2"/>
+					<field name="invoiceDate" position="178" length="6"/>
+					<field name="invoiceMonth" position="182" length="2"/>
+					<field name="invoiceYear" position="178" length="4"/>
+					<field name="stateID" position="1031" length="2"/>					
+				</record>
+				<record key=" 011D">
+					<field name="cnpj" position="810" length="40" />
+				</record>
+			</config>
+		</builder>
+		<builder-chain name="default">
+			<builder name="sirs" />
+		</builder-chain>
+	</requests:configuration>
+
+	<dw:bootstrap-listener class-name="br.com.auster.vivo.billcheckout.listeners.BootstrapListener" 
+		xmlns:dw="http://www.auster.com.br/dware/">	
+		<config>						
+			<database pool-name="sql/billcheckoutdb"/>
+		</config>			
+	</dw:bootstrap-listener>
+		
+	<dw:configuration name="invoice" xmlns:dw="http://www.auster.com.br/dware/">
+		<dw:graph-manager>
+
+		<!-- CONFIGURAÇÕES DE PRODUÇÃO -->
+	   <dw:local-graph-group name="queue-PVA-S" max-graphs="16"  max-weight="600000"/>
+	   <dw:local-graph-group name="queue-PVA-M" max-graphs="8"  max-weight="40000000"/> 
+	   <dw:local-graph-group name="queue-PVA-L" max-graphs="1"  max-weight="-1"/>
+	
+	   <dw:request-forwarder class-name="br.com.auster.dware.manager.FIFOQueueReqForwarder" />
+
+		<!-- Queue Listener -->			
+		<queue-processed-listeners>
+			<listener
+				class-name="br.com.auster.vivo.billcheckout.listeners.PVASampleQueueProcessedListener">
+				<config>						
+					<database pool-name="sql/billcheckoutdb"/>
+				</config>	
+			</listener>
+		</queue-processed-listeners>
+				
+	</dw:graph-manager>
+
+		<dw:graph-design>
+			<dw:filter name="InputFromFile" class-name="br.com.auster.dware.filter.PartialInputFromFileList">
+				<dw:config buffer-size="16384" file-cache-size="10" />
+				<dw:connect-to name="Pipe" />
+			</dw:filter>
+
+			<dw:filter name="Pipe" class-name="br.com.auster.dware.filter.PipeFilter">
+				<dw:connect-to name="Sirs2XML" />
+			</dw:filter>
+
+			<dw:filter name="Sirs2XML" class-name="br.com.auster.dware.filter.XMLReaderFilter">
+				<dw:config class-name="br.com.auster.udd.reader.TaggedFileReader">
+					<dw:xml-reader udd-path="conf/sirs-definition-v7.xml" quiet-missing="true" encrypted="false" />
+				</dw:config>
+				<dw:connect-to name="PVASample2Calls" />
+			</dw:filter>
+
+			<!--                           -->
+			<!-- Creates the list of calls -->
+			<!--                           -->
+			<dw:filter name="PVASample2Calls" class-name="br.com.auster.dware.filter.ContentHandlerPipeFilter">
+				<dw:config class-name="br.com.auster.vivo.billcheckout.sax.SirsCallDetailHandlerBC">
+					<dw:content-handler />
+				</dw:config>
+				<dw:connect-to name="PVASampleSerializer" />
+			</dw:filter>
+
+			<dw:filter name="PVASampleSerializer" class-name="br.com.auster.dware.filter.XMLSerializerFilter">
+				<dw:config method="text" encoding="ISO-8859-1" />
+				<dw:connect-to name="PVASample2File" />
+			</dw:filter>
+							
+			<dw:filter name="PVASample2File" class-name="br.com.auster.dware.filter.OutputToFile">
+				<dw:config prefix="output/pva/" suffix=".txt" format="requests.format.pva">
+					<dw:filename>
+						<dw:token>
+							<dw:format align="right" width="2" fill-char="0">
+								<dw:insert-request-field name="account" />
+							</dw:format>
+						</dw:token>
+						<dw:token>/</dw:token>
+						<dw:token>
+							<dw:format align="right" width="2" fill-char="0">
+								<dw:insert-request-field name="stateID" />
+							</dw:format>
+						</dw:token>
+						<dw:token>_BC_PVA_</dw:token>
+						<dw:token>
+							<dw:format align="right" width="2" fill-char="0">
+								<dw:insert-request-field name="cicle" />
+							</dw:format>
+						</dw:token>
+						<dw:token>_</dw:token>
+						<dw:token>
+							<dw:insert-request-field name="invoiceYear" />
+						</dw:token>
+						<dw:token>
+							<dw:insert-request-field name="invoiceMonth" />
+						</dw:token>
+						<dw:token>_</dw:token>
+						<dw:token>
+							<dw:format align="right" width="15" fill-char="0">
+								<dw:insert-request-field name="account" />
+							</dw:format>
+						</dw:token>
+					</dw:filename>
+				</dw:config>
+			</dw:filter>	
+																																
+		</dw:graph-design>
+	</dw:configuration>
+</data-aware>
+

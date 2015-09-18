@@ -1,0 +1,40 @@
+#package br.com.auster.rules.vivo.count;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.UsageDetail;
+
+global java.util.List results;
+
+/**
+ */
+rule "COUNT-FindAccountState" 
+	salience -10
+	when	
+		$acct : Account()
+	then
+		if ($acct.getAccountState().equals("GF") ) {
+			results.add($acct);
+		}			
+end 
+
+rule "COUNT-SubState" 
+	salience -10
+	when	
+		$section : Section( 
+			elementType  == "SUBSCRIPTION_INFO" )
+	then
+		if ($section.getSubscriptionState().equals("GF")) {
+			results.add($section);
+		}			
+end 
+
+rule "COUNT-UsageState" 
+	salience -10
+	when	
+		$usage : UsageDetail()
+	then
+		if ($usage.getCarrierState().equals("GF")) {
+			results.add($usage);
+		}
+end 

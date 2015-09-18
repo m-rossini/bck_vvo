@@ -1,0 +1,511 @@
+<?xml version = "1.0" encoding = "UTF-8"?>
+
+<data-aware>
+
+	<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/">
+	
+		<appender name="ERRORLOG" class="biz.minaret.log4j.DatedFileAppender">
+			<param name="Threshold" value="ERROR"/>
+			<param name="Directory" value="/opt/Billc/log"/>
+			<param name="Prefix" value="server-error-"/>
+			<param name="Suffix" value=".log"/>
+			<param name="Append" value="false"/>
+			<layout class="org.apache.log4j.PatternLayout">
+				<param name="ConversionPattern" value="%d{ABSOLUTE} %-5p [(%c{1}) %t] %m%n"/>
+			</layout>
+		</appender>
+			
+		<appender name="FILE" class="biz.minaret.log4j.DatedFileAppender">
+			<param name="Threshold" value="DEBUG"/>
+			<param name="Directory" value="/opt/Billc/log"/>
+			<param name="Prefix" value="standalone-"/>
+			<param name="Suffix" value=".log"/>
+			<param name="Append" value="false"/>
+			<layout class="org.apache.log4j.PatternLayout">
+				<param name="ConversionPattern" value="%d{ABSOLUTE} %-5p [(%c{1}) %t] %m%n"/>
+			</layout>
+		</appender>
+		
+		<root>
+			<priority value="INFO"/>
+			<appender-ref ref="FILE"/>
+
+		</root>
+	</log4j:configuration>
+
+  <sql:configuration xmlns:sql="http://www.auster.com.br/common/sql/">
+
+    <sql:database name="sql/billing">
+      <sql:statements path="conf/sql/data-barn-sql.xml"/>
+      <sql:statements path="conf/sql/negot-prices.xml"/>		  
+    </sql:database>
+
+    <sql:database name="sql/billcheckoutdb">
+       <sql:statements path="conf/sql/billcheckout-sql.xml"/>
+    </sql:database>
+  </sql:configuration> 
+
+	<requests:configuration xmlns:requests="http://www.auster.com.br/dware/requests/">
+
+		<error-listener class-name="br.com.auster.dware.console.listeners.JMSErrorListener">
+			 <config  jndi.context.factory="weblogic.jndi.WLInitialContextFactory"
+					  jndi.context.url="t3://10.128.184.138:7002"
+					  jndi.jms.factory="billcheckout.QueueConnectionFactory" 
+					  jndi.jms.name="queue/procNotification" />
+		</error-listener>
+
+		<builder name="sirs" class-name="br.com.auster.dware.request.file.FileRequestBuilder">
+			<config bufferSize="262244" encoding="ISO-8859-1" maxRecordSize="2048">
+				<record-key position="110" length="5" trim="false" new-request-pattern=" 010D" />
+				<request-key record-key-pattern=" 010D">
+					<field name="key" position="1" length="15" type="java.lang.String" />
+				</request-key>
+				<record key=" 010D">
+					<field name="account" position="1" length="15" />
+					<field name="cycle.id" position="152" length="2" />
+					<field name="invoiceDate" position="178" length="6" />
+					<field name="invoiceMonth" position="182" length="2" />
+					<field name="invoiceYear" position="178" length="4" />
+					<field name="stateID" position="1031" length="2" />
+				</record>
+				<record key=" 011D">
+					<field name="cnpj" position="810" length="40" />
+				</record>
+			</config>
+		</builder>
+		<builder-chain name="default">
+			<builder name="sirs" />
+		</builder-chain>
+	</requests:configuration>
+<!--
+	<management:configuration xmlns:management="http://www.auster.com.br/commom/management/">
+		<management:register use-default="false" class-name="br.com.auster.common.jmx.RegisterMBeanMX4J" ip-address="10.128.184.138" tcp-port="3099"
+			jndi-name="jmxconnector" />
+	</management:configuration>
+-->
+
+
+	<dw:configuration name="invoice" xmlns:dw="http://www.auster.com.br/dware/">
+
+		<dw:mbean mbean-component="DataAware" mbean-class-name="br.com.auster.dware.monitor.dware.JMXDWare"
+			pass-reference="true" />
+
+		<dw:graph-manager>
+	
+   <dw:mbean mbean-component="GraphManager"
+    mbean-class-name="br.com.auster.dware.monitor.manager.JMXGraphManager" pass-reference="true" />
+
+	<!-- CONFIGURAÇÕES DE PRODUÇÃO -->
+   <dw:local-graph-group name="queue-001-small" max-graphs="8"  max-weight="10000000">
+    <dw:mbean mbean-component="PriorityQueueWishGraphGroup"
+     mbean-class-name="br.com.auster.dware.monitor.manager.JMXPriorityWishGraphGroup" pass-reference="true" />
+   </dw:local-graph-group>
+ 
+   <dw:local-graph-group name="queue-002-medium" max-graphs="4" max-weight="40000000">
+    <dw:mbean mbean-component="PriorityQueueWishGraphGroup"
+     mbean-class-name="br.com.auster.dware.monitor.manager.JMXPriorityWishGraphGroup" pass-reference="true" />
+   </dw:local-graph-group>
+ 
+   <dw:local-graph-group name="queue-003-large" max-graphs="1"  max-weight="80000000">
+    <dw:mbean mbean-component="PriorityQueueWishGraphGroup"
+     mbean-class-name="br.com.auster.dware.monitor.manager.JMXPriorityWishGraphGroup" pass-reference="true" />
+   </dw:local-graph-group>
+
+   <dw:local-graph-group name="queue-004-dummy" max-graphs="1"  max-weight="80000001">
+    <dw:mbean mbean-component="PriorityQueueWishGraphGroup"
+     mbean-class-name="br.com.auster.dware.monitor.manager.JMXPriorityWishGraphGroup" pass-reference="true" />
+   </dw:local-graph-group>
+  
+   <!--dw:checkpoint class-name="br.com.auster.dware.manager.checkpoint.RetryOnlyCheckpoint" max-req-fails="3" /-->
+   
+   <dw:request-forwarder class-name="br.com.auster.dware.manager.FIFOQueueReqForwarder" />
+
+	<!-- Queue Listener -->
+	<dw:queue-processed-listeners>
+		<dw:listener
+			class-name="br.com.auster.billcheckout.listeners.BillcheckoutQueueProcessedListener">
+			<dw:config>
+				<dw:implementation pool-timer="30000"
+					class-name="br.com.auster.billcheckout.listeners.SimplePollListener">
+					<dw:jms path="jms/jms-config.properties"></dw:jms>
+					<dw:database pool-name="sql/billcheckoutdb">
+						<statement-names>
+							<statement-name name="RequestsFinished" />
+							<statement-name name="TransactionFinishedSelect" />
+							<statement-name name="TransactionFinishedUpdate" />
+						</statement-names>
+					</dw:database>
+				</dw:implementation>
+			</dw:config>
+		</dw:listener>
+	</dw:queue-processed-listeners>
+
+	</dw:graph-manager>
+
+		<dw:graph-design>
+			<finish-listener class-name="br.com.auster.dware.console.listeners.JMSFinishListener">
+				 <config  jndi.context.factory="weblogic.jndi.WLInitialContextFactory"
+						  jndi.context.url="t3://10.128.184.138:8080"
+						  jndi.jms.factory="billcheckout.QueueConnectionFactory" 
+						  jndi.jms.name="queue/procNotification" />
+			</finish-listener>
+
+			<dw:filter name="InputFromFile" class-name="br.com.auster.dware.filter.PartialInputFromFileList">
+				<dw:config buffer-size="16384" file-cache-size="10" />
+				<dw:connect-to name="Pipe" />
+			</dw:filter>
+
+			<dw:filter name="Pipe" class-name="br.com.auster.dware.filter.PipeFilter">
+				<dw:connect-to name="Sirs2XML" />
+			</dw:filter>
+
+			<dw:filter name="Sirs2XML" class-name="br.com.auster.dware.filter.XMLReaderFilter">
+				<dw:config class-name="br.com.auster.udd.reader.TaggedFileReader">
+					<dw:xml-reader udd-path="conf/sirs-definition-v7.xml" quiet-missing="true" encrypted="false" />
+				</dw:config>
+				<dw:connect-to name="RequestDropper" />
+			</dw:filter>
+
+            <!-- Checks to see if the request is above a given threshold --> 
+            <dw:filter name="RequestDropper" class-name="br.com.auster.dware.filter.CHLimiterPipeFilter">
+                 <dw:config max-size="300000000" pct-deviation="5" >
+                 </dw:config>
+                 <dw:connect-to name="XMLSplitter" />
+            </dw:filter> 
+			
+			<dw:filter name="XMLSplitter" class-name="br.com.auster.dware.filter.XMLManagerFilter">
+				<dw:config>
+					<dw:output name="PVASample2Calls" format="requests.format.pva"/>
+					<dw:output name="InvoiceLoader" format="requests.format.bck"/>
+				</dw:config>
+				<dw:connect-to name="PVASample2Calls" />
+				<dw:connect-to name="InvoiceLoader" />
+			</dw:filter>
+
+			<!--                           -->
+			<!-- Creates the list of calls -->
+			<!--                           -->
+			<dw:filter name="PVASample2Calls" class-name="br.com.auster.dware.filter.ContentHandlerPipeFilter">
+				<dw:config class-name="br.com.auster.vivo.billcheckout.sax.SirsCallDetailHandlerBC">
+					<dw:content-handler />
+				</dw:config>
+				<dw:connect-to name="PVASampleSerializer" />
+			</dw:filter>
+
+			<dw:filter name="PVASampleSerializer" class-name="br.com.auster.dware.filter.XMLSerializerFilter">
+				<dw:config method="text" encoding="ISO-8859-1" />
+				<dw:connect-to name="PVASample2File" />
+			</dw:filter>
+							
+			<dw:filter name="PVASample2File" class-name="br.com.auster.dware.filter.OutputToFile">
+				<dw:config prefix="output/pva/" suffix=".txt" format="requests.format.pva">
+					<dw:filename>
+						<dw:token>
+							<dw:format align="right" width="2" fill-char="0">
+								<dw:insert-request-field name="account" />
+							</dw:format>
+						</dw:token>
+						<dw:token>/</dw:token>
+						<dw:token>
+							<dw:format align="right" width="2" fill-char="0">
+								<dw:insert-request-field name="stateID" />
+							</dw:format>
+						</dw:token>
+						<dw:token>_BC_PVA_</dw:token>
+						<dw:token>
+							<dw:format align="right" width="2" fill-char="0">
+								<dw:insert-request-field name="cicle" />
+							</dw:format>
+						</dw:token>
+						<dw:token>_</dw:token>
+						<dw:token>
+							<dw:insert-request-field name="invoiceYear" />
+						</dw:token>
+						<dw:token>
+							<dw:insert-request-field name="invoiceMonth" />
+						</dw:token>
+						<dw:token>_</dw:token>
+						<dw:token>
+							<dw:format align="right" width="15" fill-char="0">
+								<dw:insert-request-field name="account" />
+							</dw:format>
+						</dw:token>
+					</dw:filename>
+				</dw:config>
+			</dw:filter>	
+																																
+			<!--                           -->
+			<!-- This is the Rules Engine 
+				  portion of the graph.    -->
+			<!--                           -->
+			<dw:filter name="InvoiceLoader" class-name="br.com.auster.om.filter.InvoiceLoaderFilter">
+				<dw:config>
+					<dw:invoice-loader class-name="br.com.auster.sirs.loader.SirsLoader">
+						<dw:loader-config tag-map-file="sirs/sirs-tag-map.properties" encrypted="false" />
+					</dw:invoice-loader>
+					<dw:object-list-tag name="invoice-om" />
+				</dw:config>
+				<dw:connect-to name="GuidingFilter" />
+			</dw:filter>
+
+			<dw:filter name="GuidingFilter"
+				class-name="br.com.auster.billcheckout.rules.InvoiceRulesEngineFilter">
+				<dw:config>
+					<dw:input-list-tag name="invoice-om" />
+					<dw:results-map-tag name="no-results" />
+					
+					<dw:assertionEngine
+						class-name="br.com.auster.billcheckout.rules.assertion.XPathContextAssertionEngine"
+						xpath-file="conf/context-om-objects.xml" />
+
+					<dw:rules-engine
+						class-name="br.com.auster.billcheckout.rules.Drools4DirectoriesRulesEngineProcessor">
+						<!-- 
+							<dw:listeners
+							memoryListenerClass="br.com.auster.billcheckout.rules.listeners.StandardSessionListener"
+							agendaListenerClass="br.com.auster.billcheckout.rules.listeners.StandardAgendaListener"
+							flowListenerClass="br.com.auster.billcheckout.rules.listeners.StandardFlowListener"
+							agentListenerClass="br.com.auster.billcheckout.rules.listeners.StandardAgentListener" />
+						-->
+						<RuleBaseConfig
+							propertiesFile="conf/rulebaseguiding.properties" />
+						<RuleAgentConfig
+							propertiesFile="conf/ruleagent.properties" />
+						<PackageBuilderConfig
+							propertiesFile="conf/packagebuilder.properties" />
+
+						<RulePackages>
+							<RulePackage name="PackageINIT"
+								base="conf/drools/guiding" drlMask="INIT*.drl" />
+							<RulePackage name="PackageGUIDE"
+								base="conf/drools/guiding" drlMask="usg-class*.drl" />
+							<RulePackage name="PackageRateSubs"
+								base="conf/drools/guiding" drlMask="rate-subscription.drl" />
+							<RulePackage name="PackageRateUsage"
+								base="conf/drools/guiding" drlMask="rate-usage.drl"/> 
+						</RulePackages>
+
+					</dw:rules-engine>
+
+					<dw:globals-list>
+
+						<dw:global name="adBagReference"
+							class-name="br.com.auster.vivo.billcheckout.util.ADQualficationFacade"
+							config-file="" encrypted="false"
+							data-file="parm/ad1rulesByState.txt" />
+
+						<dw:global name="adBagReferenceAC"
+							class-name="br.com.auster.vivo.billcheckout.util.ADQualficationFacade"
+							config-file="" encrypted="false"
+							data-file="parm/ad1rulesByAreaCode.txt" />
+
+						<dw:global name="priceEngine"
+							class-name="br.com.auster.vivo.billcheckout.pricing.SQLPricingFacadeImpl"
+							pool-name="sql/billcheckoutdb" skip-negotiables="false"
+							cache-size="6000" notfoundset-size="500">
+
+							<negotiable-datasource
+								pool-name="sql/billing" price-statement="USAGE_NEGOT_PRICE"
+								subscription-statement="NONE" />
+
+
+						</dw:global>
+
+
+					</dw:globals-list>
+				</dw:config>
+				<dw:connect-to name="RulesFilter" />
+			</dw:filter>
+
+			<dw:filter name="RulesFilter"
+				class-name="br.com.auster.billcheckout.rules.InvoiceRulesEngineFilter">
+				<dw:config>
+					<dw:input-list-tag name="invoice-om" />
+					<dw:results-map-tag name="consequence-list" />
+					
+					<dw:assertionEngine
+						class-name="br.com.auster.billcheckout.rules.assertion.XPathContextAssertionEngine"
+						xpath-file="conf/context-om-objects.xml" />
+											
+					<dw:rules-engine
+						class-name="br.com.auster.billcheckout.rules.Drools4DirectoriesRulesEngineProcessor">
+						<!-- 
+							<dw:listeners
+							memoryListenerClass="br.com.auster.billcheckout.rules.listeners.StandardSessionListener"
+							agendaListenerClass="br.com.auster.billcheckout.rules.listeners.StandardAgendaListener"
+							flowListenerClass="br.com.auster.billcheckout.rules.listeners.StandardFlowListener"
+							agentListenerClass="br.com.auster.billcheckout.rules.listeners.StandardAgentListener" />
+						-->
+						<RuleBaseConfig
+							propertiesFile="conf/rulebasebusiness.properties" />
+						<RuleAgentConfig
+							propertiesFile="conf/ruleagent.properties" />
+						<PackageBuilderConfig
+							propertiesFile="conf/packagebuilder.properties" />
+
+						<RulePackages>
+							<RulePackage name="PackageINIT"
+								base="conf/drools/" drlMask="INIT*.drl" />
+							<RulePackage name="PackageR01"
+								base="conf/drools/" drlMask="R01*.drl" />
+							<RulePackage name="PackageR02"
+								base="conf/drools/" drlMask="R02*.drl" />
+							<RulePackage name="PackageR04"
+								base="conf/drools/" drlMask="R04*.drl" />	
+							<RulePackage name="PackageR05"
+								base="conf/drools/" drlMask="R05*.drl" />
+							<RulePackage name="PackageR08"
+								base="conf/drools/" drlMask="R08*.drl" />
+							<RulePackage name="PackageR09"
+								base="conf/drools/" drlMask="R09*.drl" />
+							<RulePackage name="PackageR11"
+								base="conf/drools/" drlMask="R11*.drl" />
+							<RulePackage name="PackageR12"
+								base="conf/drools/" drlMask="R12*.drl" />
+							<RulePackage name="PackageR16"
+								base="conf/drools/" drlMask="R16*.drl" />
+							<RulePackage name="PackageR19"
+								base="conf/drools/" drlMask="R19*.drl" />	
+<!--
+							<RulePackage name="PackageR47"
+								base="conf/drools/" drlMask="R47*.drl" />
+-->
+							<RulePackage name="PackageR50"
+								base="conf/drools/" drlMask="R50*.drl" />
+							<RulePackage name="PackageR59"
+								base="conf/drools/" drlMask="R59*.drl" />
+							<RulePackage name="PackageR60"
+								base="conf/drools/" drlMask="R60*.drl" />
+							<RulePackage name="PackageR64"
+								base="conf/drools/" drlMask="R64*.drl" />
+							<RulePackage name="PackageR68"
+								base="conf/drools/" drlMask="R68*.drl" />	
+							<RulePackage name="PackageR83"
+								base="conf/drools/" drlMask="R83*.drl" />
+						</RulePackages>
+						
+					</dw:rules-engine>
+					
+					<dw:globals-list>
+						<dw:global name="dimensionCache"
+							class-name="br.com.auster.vivo.billcheckout.util.DimensionCache">
+						</dw:global>
+						<dw:global name="priceEngine"
+							class-name="br.com.auster.vivo.billcheckout.pricing.SQLPricingFacadeImpl"
+							pool-name="sql/billcheckoutdb">
+						</dw:global>
+						<dw:global name="consequenceBuilder"
+							class-name="br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder">
+						</dw:global>
+						<dw:global name="dueDatesCache"
+							class-name="br.com.auster.billcheckout.param.DueDatesCache"
+							config-file="" use-alternate="false" lazy-cache="false"
+							cache-size="175">
+							<database pool-name="sql/billcheckoutdb" />
+						</dw:global>
+						<dw:global name="taxRateCache"
+							class-name="br.com.auster.billcheckout.param.TaxRateCache"
+							config-file="" use-alternate="true" lazy-cache="false"
+							cache-size="450">
+							<database pool-name="sql/billcheckoutdb" />
+						</dw:global>
+						<dw:global name="callThresholdsCache"
+							class-name="br.com.auster.billcheckout.param.CallThresholdsCache"
+							config-file="" use-alternate="false" lazy-cache="false"
+							cache-size="300">
+							<database pool-name="sql/billcheckoutdb" />
+						</dw:global>
+<!--
+						<dw:global name="databarn"
+							class-name="br.com.auster.billcheckout.param.SQLEmitter"
+							config-file="">
+							<database pool-name="sql/billing" />
+						</dw:global>
+-->
+						<dw:global name="dbservicesCB"
+							class-name="br.com.auster.vivo.billcheckout.cache.ContractBreakPenaltyServices"
+							config-file="">
+							<database pool-name="sql/billing"
+								sql-name="ContractBreakPenalty" />
+						</dw:global>
+
+						<dw:global name="dbservicesIF"
+							class-name="br.com.auster.vivo.billcheckout.cache.InterestFeeServices"
+							config-file="">
+							<database pool-name="sql/billing"
+								sql-name="InterestFee" />
+						</dw:global>
+<!-- 
+						<dw:global name="dbservicesR20"
+							class-name="br.com.auster.vivo.billcheckout.cache.ProgressiveDiscountServices"
+							config-file="">
+							<database pool-name="sql/billing">
+								<statement-names>
+									<stament-name
+										name="ProgressiveDiscount1" />
+								</statement-names>
+							</database>
+						</dw:global>
+
+						<dw:global name="dbservicesR23"
+							class-name="br.com.auster.vivo.billcheckout.cache.UsagePromotionsServices"
+							config-file="">
+							<database pool-name="sql/billing">
+								<statement-names>
+									<stament-name name="PromotionTypes" />
+									<stament-name
+										name="PromotionEnrollments" />
+									<stament-name
+										name="PromotionRanges" />
+									<stament-name
+										name="PromotionControl" />
+								</statement-names>
+							</database>
+						</dw:global>
+
+						<dw:global name="dbservicesR30"
+							class-name="br.com.auster.vivo.billcheckout.cache.IntragroupServices"
+							config-file="">
+							<database pool-name="sql/billing">
+								<statement-names>
+									<stament-name name="R30_01" />
+									<stament-name name="R30_02" />
+								</statement-names>
+							</database>
+						</dw:global>
+
+						<dw:global name="dbservicesR66"
+							class-name="br.com.auster.vivo.billcheckout.cache.MarketingPromotionsServices"
+							config-file="">
+							<database pool-name="sql/billing">
+								<statement-names>
+									<stament-name name="R66_01" />
+									<stament-name name="R66_02" />
+									<stament-name name="R66_03" />
+									<stament-name name="R66_04" />
+								</statement-names>
+							</database>
+						</dw:global>
+ -->
+					</dw:globals-list>
+				</dw:config>
+				<dw:connect-to name="TransactionSetting" />
+			</dw:filter>
+			
+			<dw:filter name="TransactionSetting" class-name="br.com.auster.dware.filter.DataRetrieverFilter">
+				<dw:config>
+					<dw:data-retriever class-name="br.com.auster.common.data.groovy.GroovyDataRetriever"
+						                 config-file="ep/set-transaction-id.xml" encrypted="false" />
+					<dw:request-tag name="request" />
+				</dw:config>
+				<dw:connect-to name="HibernateSaver" />
+			</dw:filter>
+
+			<dw:filter name="HibernateSaver" class-name="br.com.auster.billcheckout.filter.telco.TelcoBillcheckoutPersistenceFilter">
+				<dw:config input-list-tag="consequence-list">
+					<dw:hibernate file-name="sql/consequence-hibernate.xml" encrypted="false" commit-count="1000" dry-run="true"/>
+				</dw:config>
+			</dw:filter>
+		</dw:graph-design>
+	</dw:configuration>
+</data-aware>

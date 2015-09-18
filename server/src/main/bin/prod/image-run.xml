@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<project name="auster-billcheckout" default="server.run">
+
+	<property environment="env" />
+	<property name="memory" value="1G" />
+
+	<target name="server.run">
+
+		<path id="run.classpath">
+			<fileset dir="${basedir}/lib" includes="*" />
+			<pathelement location="${basedir}/conf" />
+		</path>
+
+		<java classname="br.com.auster.vivo.billcheckout.ImageBootstrap"
+			fork="yes"
+			output="/opt/Billc/log/imageBoot.out"
+			error="/opt/Billc/log/imageBoot.err"
+			maxmemory="${memory}"
+			dir="${basedir}">
+
+			<jvmarg value="-d64" />
+			<jvmarg value="-Xms${memory}" />
+			<jvmarg value="-server" />
+
+			<sysproperty key="app.name" value="ImageBuilder" />
+			<sysproperty key="java.endorsed.dirs" value="${basedir}/lib/endorsed" />
+			<sysproperty key="java.security.policy" value="etc/security.policy" />
+			<sysproperty key="jdbc.drivers" value="org.apache.commons.dbcp.PoolingDriver:oracle.jdbc.driver.OracleDriver" />
+			<sysproperty key="user.timezone" value="GMT-3"/>
+			<sysproperty key="com.sun.management.jmxremote" value="true" />
+			<sysproperty key="javax.management.builder.initial" value="mx4j.server.MX4JMBeanServerBuilder" />
+			<sysproperty key="com.sun.management.jmxremote.authenticate" value="false" />
+			<sysproperty key="com.sun.management.jmxremote.ssl" value="false" />
+			<sysproperty key="log4j.configuration" value="file:./conf/image/log4j.xml" />
+			<!-- for Windows env. use command line as 'cmd /c ant' -->
+			<sysproperty key="ant.commandLine" value="ant" />
+
+			<arg line="conf/image.xml" />
+
+			<classpath>
+				<path refid="run.classpath" />
+			</classpath>
+		</java>
+
+	</target>
+
+</project>

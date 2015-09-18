@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+
+<udd:document name="IFD" 
+   description="Mapeamento SIRS para Versao 10. Julho de 2004"
+   xmlns:udd="http://www.auster.com.br/udd/TaggedFileReader/" 
+   descriptor-version="2.0.0"
+   descriptor-date="2006/04/01" 
+   descriptor-author="Auster Solutions do Brasil LTDA"
+   encoding-from="ISO-8859-1" 
+   max-record-size="32768" 
+   buffer-size="262144" 
+   separator-char="\n"
+   quiet-missing="true" 
+   print-key="false">
+
+  <udd:key-definition>
+    <udd:attribute name="key" start="110" end="114"/>
+  </udd:key-definition>
+
+  <udd:key start-key="010D" end-key="999D" name="ACCOUNT_LIST">
+    <attribute name="account-id"            start="1"       size="15"/>
+    <attribute name="cycle-code"            start="152"     size="2"/>
+    <attribute name="cycle-date"            start="154"	 	size="8"/>
+
+    <udd:key start-key="011D" name="BILLING_ADDRESS" >
+      <attribute name="customer-name" start="127" size="95"/>
+    </udd:key>
+
+   </udd:key>
+
+</udd:document>

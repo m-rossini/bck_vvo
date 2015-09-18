@@ -1,0 +1,46 @@
+<?xml version = "1.0" encoding = "UTF-8"?>
+<root>
+	<sql:configuration xmlns:sql="http://www.auster.com.br/common/sql/">
+		<sql:statements>
+
+		<sql:statement name="USAGE_NEGOT_PRICE">
+<!--
+	CHARGE_TYPE é o tipo da tarifa ( 'U' para uso, 'F' para franquia, ...)
+	EFFECTIVE_DATE é a data a partir da qual esta tarifa é válida
+	EXPIRATION_DATE é a data final de validade da tarifa	
+	SCENARIO_ID é o svc_price_seq_nbr utilizado na tarifação do evento
+	INITIAL_UNIT_VALUE valor mínimo cobrado
+	INITIAL_UNIT_QTY quantidade (na unidade de medida) considerada como mínimo cobrado
+	INITIAL_UNIT_TYPE unidade de medida considerada por esta tarifa
+	INITIAL_UNIT_INCL_QTY quantidade mínima a descontar da utilizada no evento de uso, no momento do recálculo da tarifa 
+	STEP_UNIT_VALUE valor de cada passo adicional cobrado
+	STEP_UNIT_QTY quantidade (na unidade de medida) considerada como passo adicional
+	STEP_UNIT_TYPE unidade de medida considerada por esta tarifa
+	STEP_UNIT_INCL_QTY quantidade, por passo adicional, descontar da utilizada no evento de uso, no momento do recálculo da tarifa
+	SP_AREA_ID é a área na qual esta tarifa se aplica
+	TAX_CODE é o código da categoria de imposto na qual se aplica esta tarifa
+	*** NOTA: Até este ponto, todos os campos são os mesmos descritos no layout de importação de tarifas ***
+	UPDATED_DATE é a data da última modificação feita neste registro
+	ACCOUNT_NUMBER é o número da Conta
+-->				
+	<sql:query>
+select 
+sbscrp_id, acct_nbr, svc_price_seq_nbr, svc_name,
+OBJID,  CHARGE_TYPE, EFFECTIVE_DATE, EXPIRATION_DATE,
+SCENARIO_ID, FREE_UNITS_ID, INITIAL_UNIT_VALUE,
+INITIAL_UNIT_QTY, INITIAL_UNIT_TYPE,
+INITIAL_UNIT_INCL_QTY,  STEP_UNIT_VALUE,
+STEP_UNIT_QTY, STEP_UNIT_TYPE,
+STEP_UNIT_INCL_QTY, NEGOTIABLE_FLAG, PASSTHROUGH_FLAG,
+SP_AREA_ID, TAX_CODE, updated_date, CUSTOM_1, CUSTOM_2, CUSTOM_3,
+negot_pct,  negot_type_cd,  negot_tax_incl_flag 
+from R50_NEGOT_PRICE
+where
+CHARGE_TYPE = 'U' and
+acct_nbr = ?
+			</sql:query>					
+		</sql:statement>
+
+		</sql:statements>
+	</sql:configuration>
+</root>

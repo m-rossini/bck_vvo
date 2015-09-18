@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<document name="Service Price" 
+		  encoding-from="ISO-8859-1"
+          max-record-size="10240"
+          buffer-size="256"
+          separator-char="\n">
+	
+	<element name="tax-info" separator=";">
+		<attribute name="tax-code" 			index="1"/>
+		<attribute name="state-id" 			index="2"/>
+		<attribute name="rate-factor"		index="3"/>
+		<attribute name="effective-date"	index="4"/>
+	</element>
+	
+</document>

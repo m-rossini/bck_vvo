@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<sdd:document name="Carrier_And_FiscalCodes" 
+              xmlns:sdd="http://www.auster.com.br/udd/TaggedFileReader/"
+			  encoding-from="ISO-8859-1"
+			  max-record-size="16384"
+              buffer-size="512"
+			  separator-char="\n"
+			  key-start="0"
+			  key-end="4"
+			  quiet-missing="true">
+
+	<sdd:key start-key="ADDR" name="carrier" separator=";" index="1">
+		<attribute name="name"        index="2"/>
+		<attribute name="code"        index="3"/>
+		<attribute name="marketName"  index="5"/>
+		<attribute name="streetName"  index="6"/>
+		<attribute name="streetNbr"   index="7"/>
+		<attribute name="city"        index="8"/>
+		<attribute name="uf"          index="4"/>
+		<attribute name="country"     index="9"/>
+		<attribute name="zipCode"     index="10"/>
+		<attribute name="regNumber"   index="11"/>
+	</sdd:key>																	
+
+	<sdd:key start-key="FCDE" name="carrier_code" separator=";" index="1">
+		<attribute name="carrier"     index="2"/>
+		<attribute name="fiscalCode"  index="3"/>
+		<attribute name="description" index="4"/>
+	</sdd:key>																	
+		
+</sdd:document>

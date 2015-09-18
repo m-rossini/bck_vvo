@@ -1,0 +1,69 @@
+#package br.com.auster.rules.vivo;
+
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+
+global java.util.List results;
+
+#
+#  540D - Chamadas de Longa Distância para Outros Estados
+#
+rule "540D VC3 MM" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+        						tag == "540D", 
+        						eval(calledNumber.length() > 3),
+                                eval("789".contains(calledNumber.substring(2,3)))
+                               )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC3H);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_MM);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());    
+        $usage.setCallAsHome();
+        $usage.setCallAsLongDistance(); 
+        $usage.setDetailCFOP("1140");             
+end
+
+rule "540D VC3 MF" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "540D",
+                              eval(calledNumber.length() > 3),
+                              eval("_123456".contains(calledNumber.substring(2,3)))
+                              )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC3H);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_MF);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());      
+        $usage.setCallAsHome();
+        $usage.setCallAsLongDistance(); 
+        $usage.setDetailCFOP("1140");           
+end
+
+rule "540D VC3 NC" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+        						tag == "540D", 
+        						eval(calledNumber.length() > 3),
+                              	eval(! "_123456789".contains(calledNumber.substring(2,3)))
+                              )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_VC3H);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_NC);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());       
+        $usage.setCallAsHome();
+        $usage.setCallAsLongDistance();   
+        $usage.setDetailCFOP("1140");        
+end

@@ -1,0 +1,53 @@
+<config>
+	<input-list-tag name="invoice-om" />
+	<results-map-tag name="consequence-list" />
+	<assertionEngine
+		class-name="br.com.auster.billcheckout.rules.assertion.XPathContextAssertionEngine"
+		xpath-file="src/main/conf/asr1/context-om-objects.xml" />
+	<rules-engine
+		class-name="br.com.auster.billcheckout.rules.Drools4DirectoriesRulesEngineProcessor">
+
+		<RuleBaseConfig propertiesFile="src/main/conf/asr1/rulebasebusiness.properties" />
+		<RuleAgentConfig propertiesFile="src/main/conf/asr1/ruleagent.properties" />
+		<PackageBuilderConfig propertiesFile="src/main/conf/asr1/packagebuilder.properties" />
+
+		<RulePackages>
+			<RulePackage name="PackageINIT" base="src/main/conf/drools"
+				drlMask="INIT-*.drl" />
+			<RulePackage name="PackageR55" base="src/main/conf/drools"
+				drlMask="R55-negotiable-products.drl" />
+		</RulePackages>
+	</rules-engine>
+
+	<globals-list>						
+		<global name="dimensionCache"
+			         class-name="br.com.auster.vivo.billcheckout.util.DimensionCache">
+	  </global>
+
+		<global name="consequenceBuilder"
+			         class-name="br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder">
+		</global>				
+
+		<global name="negotiableProductsCache"
+			class-name="br.com.auster.vivo.billcheckout.caches.R55NegotiableProductsCache">
+			<cache type="NonLazy" auto-refresh-period="24" />
+			<database pool-name="sql/tiamatdb">
+				<statement-names>
+					<stament-name name="R55_NegotiableProducts" />
+				</statement-names>
+			</database>
+		</global>
+
+		<global name="dtbnQueryExecutor"
+				class-name="br.com.auster.vivo.billcheckout.cache.DataBarnQueryExecutor"
+				config-file="">
+			<database pool-name="sql/tiamatdb">
+				<statement-names>
+					<stament-name name="R55_NegotProd" />
+				</statement-names>
+			</database>
+		</global>		
+										
+	</globals-list>
+
+</config>

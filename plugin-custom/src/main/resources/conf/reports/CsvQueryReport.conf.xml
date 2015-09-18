@@ -1,0 +1,19 @@
+<?xml version="1.0" ?>
+<report-configuration name="ConsequenceCSVReport">
+   <report-query>
+      select account_number as CONTA, customer_type as TIPO_CLIENTE, penalties_amnt as MULTA,
+             interests_amnt as JUROS, penalties_return_amnt as RESSARC_MULTA,
+             interests_return_amnt as RESSARC_JUROS, contract_break_amnt as CANC_CONTRATO,
+             ajustment_amnt as AJUSTES, month_instmt_amnt as PRC_DEBITOS,
+             eqpmnt_instmt_amnt as PRC_EQUIPAMENTOS, retention_amnt as RETENCAO_LEI,
+             curr_period_amnt as GASTO_MES, dispute_credits as CRED_DISPUTA,
+             total_amnt as TOTAL_PAGAR
+        from bck_account_summary
+       where external_id=$P{PARAM_REQUEST_ID}
+         and account_state=$P{PARAM_ACCT_STATE}
+       order by account_number
+   </report-query>
+   <delimiter field=';' text='"'/>
+   <row-limit value='1001'/>
+</report-configuration>
+

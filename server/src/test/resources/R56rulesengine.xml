@@ -1,0 +1,48 @@
+<config>
+	<input-list-tag name="invoice-om" />
+	<results-map-tag name="consequence-list" />
+	<assertionEngine
+		class-name="br.com.auster.billcheckout.rules.assertion.XPathContextAssertionEngine"
+		xpath-file="src/main/conf/asr1/context-om-objects.xml" />
+		
+
+	<rules-engine
+		class-name="br.com.auster.billcheckout.rules.Drools4DirectoriesRulesEngineProcessor">
+
+		<RuleBaseConfig
+			propertiesFile="src/main/conf/asr1/rulebasebusiness.properties" />
+		<RuleAgentConfig
+			propertiesFile="src/main/conf/asr1/ruleagent.properties" />
+		<PackageBuilderConfig
+			propertiesFile="src/main/conf/asr1/packagebuilder.properties" />
+
+		<RulePackages>
+			<RulePackage name="PackageINITrules" base="src/main/conf/drools" drlMask="INIT*.drl" />
+			<RulePackage name="PackageR56" base="src/main/conf/drools" 	drlMask="R56-priority-order.drl" />
+		</RulePackages>
+	</rules-engine>
+
+	<globals-list>
+		<global name="dimensionCache"
+			class-name="br.com.auster.vivo.billcheckout.util.DimensionCache">
+		</global>
+
+		<global name="consequenceBuilder"
+			class-name="br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder">
+		</global>
+
+		<global name="priceEngine"
+			class-name="br.com.auster.vivo.billcheckout.pricing.SQLPricingFacadeImpl"
+			pool-name="sql/tiamatdb">
+		</global>
+
+		<global name="dbservicesPO"
+			class-name="br.com.auster.vivo.billcheckout.cache.PriorityOrderServices"
+			config-file="">
+			<database pool-name="sql/tiamatdb"
+				sql-name="PriorityOrder" />
+		</global>
+
+	</globals-list>
+
+</config>

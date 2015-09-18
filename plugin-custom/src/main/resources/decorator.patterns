@@ -1,0 +1,4 @@
+datetime=dd/MM/yyyy HH:mm
+date=dd/MM/yyyy
+time=HH:mm
+float=#,##0.00000000;-#,##0.00000000

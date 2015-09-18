@@ -1,0 +1,4 @@
+<?xml version='1.0' encoding='utf-8'?>
+
+<sql-configuration 
+	url="jdbc:apache:commons:dbcp:/sql/billcheckoutdb"/>

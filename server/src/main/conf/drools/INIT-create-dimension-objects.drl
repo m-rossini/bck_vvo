@@ -1,0 +1,127 @@
+#package br.com.auster.rules.vivo.init;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Receipt;
+
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoDimensionsFacade;
+
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+
+global java.util.List results; 
+
+/** 
+ * Defines the region for each state
+ */
+function String findRegion(String _state) {
+   if (_state == null) { return null; }
+   // estados do Sudeste
+   if ("SP".equals(_state) || "RJ".equals(_state) || 
+       "ES".equals(_state) || "MG".equals(_state)) {
+       return "Sudeste";
+   // estados do Sul
+   } else if ("SC".equals(_state) || "RS".equals(_state) || 
+              "PR".equals(_state)) {
+       return "Sul";
+   // estados do Centro-Oeste
+   } else if ("DF".equals(_state) || "MT".equals(_state) || 
+              "MS".equals(_state) || "GO".equals(_state)) {
+       return "Centro-Oeste";
+   // estados do Norte
+   } else if ("AC".equals(_state) || "RO".equals(_state) || 
+              "AM".equals(_state) || "PA".equals(_state) || 
+              "RR".equals(_state) || "AP".equals(_state) || 
+              "TO".equals(_state)) {
+       return "Norte";
+   // estados do Nordets
+   } else if ("BA".equals(_state) || "SE".equals(_state) || 
+              "AL".equals(_state) || "PE".equals(_state) || 
+              "PB".equals(_state) || "RN".equals(_state) || 
+              "PI".equals(_state) || "CE".equals(_state) ||               
+              "MA".equals(_state)) {
+       return "Nordeste";
+	}
+   return "Desconhecido";
+}
+
+/**
+ * INIT: These rules will build all dimension objects needed to create consequences
+ *       and will store them into a cache-like global.
+ */
+rule "INIT-Account-Dimension" 
+	salience 96
+	when	
+		$account : Account()
+	then
+	   //TelcoDimensionsFacade facade = (TelcoDimensionsFacade)consequenceBuilder.getFacade();
+	   // account dimension - one for each account
+	   AccountDimension acc = new AccountDimension($account.getAccountType(), 
+	                                               null, 
+	                                               $account.getAccountNumber());
+	   dimensionCache.addToCache("account", acc); //facade.saveAccount(acc));
+	   // geographic dimension - one for each account
+	   
+	   GeographicDimension geo = new GeographicDimension("Brasil", 
+	                                                     findRegion($account.getAccountState()), 
+	                                                     $account.getAccountState(), 
+	                                                     null);
+      dimensionCache.addToCache("geo", geo); //facade.saveGeo(geo));
+end 
+
+rule "INIT-Invoice-Dimension"
+	salience 96
+	when	
+		$invoice : Invoice($cycle : cycleCode)
+	then
+	   //TelcoDimensionsFacade facade = (TelcoDimensionsFacade)consequenceBuilder.getFacade();
+	   // cycle dimension - one for each account (since we got 1 invoice per account)
+	   CycleDimension cycle = new CycleDimension($cycle, 
+	                                             $invoice.getCycleEndDate(), 
+	                                             $invoice.getIssueDate(),
+	                                             $invoice.getDueDate());
+	                                             
+   	   dimensionCache.addToCache("cycle", cycle); //facade.saveCycle(cycle));
+	   // time dimension - one for each invoice
+	   TimeDimension time = new TimeDimension($invoice.getCycleStartDate());
+   	   dimensionCache.addToCache("time", time); //facade.saveTime(time));	   
+end 
+
+/***
+* Needed when there is no Receipt on the Invoice OR when invoice has NO receipt of its own carrier.
+* That is reason it takes High priority...We create the default carrier always...
+* If we later find a carrier in a receipt , the cache just replaces it...
+*/
+rule "INIT-Carrier-Dimension-Without Receipt"
+	salience 97
+	when	
+		Account( $cs : accountState )			
+		#not (Receipt())
+	then
+           //TelcoDimensionsFacade facade = (TelcoDimensionsFacade)consequenceBuilder.getFacade();
+	   CarrierDimension carrier = new CarrierDimension("VIVO", 
+	                                                   "00",
+	                                                   $cs);
+   	   dimensionCache.addToCache("00", carrier); //facade.saveCarrier(carrier));
+end
+
+rule "INIT-Carrier-Dimension"
+	salience 96
+	when	
+		$receipt : Receipt( 
+			$cn : carrierName,
+			$cs : carrierState,
+			$cc : carrierCode )
+	then
+           //TelcoDimensionsFacade facade = (TelcoDimensionsFacade)consequenceBuilder.getFacade();
+	   // carrier dimension - one for each NF
+	   CarrierDimension carrier = new CarrierDimension($receipt.getCarrierName(), 
+	                                                   $receipt.getCarrierCode(),
+	                                                   $receipt.getCarrierState());
+   	   dimensionCache.addToCache($receipt.getCarrierCode(), carrier); //facade.saveCarrier(carrier));	   	   
+end 

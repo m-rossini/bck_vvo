@@ -1,0 +1,100 @@
+package br.com.auster.rules.vivo.R47;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+import br.com.auster.billcheckout.param.DueDateVO;
+import br.com.auster.vivo.billcheckout.util.InvoiceUtils;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+global br.com.auster.billcheckout.param.DueDatesCache dueDatesCache;
+
+function boolean dueDateMatches(Invoice invoice, DueDateVO dueDates) {
+	if (invoice == null || dueDates == null) { return false; }
+	return InvoiceUtils.dueDateMatches(invoice, dueDates);
+}
+
+/***
+function String formatDate(Date date) {
+	SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
+	
+	return sdf.format(date);
+}
+***/
+#
+#  Regra 47 - Validação da Data de Vencimento
+#
+rule "Regra 47-1" 
+activation-group "R47" # Quando esta regra der "fire", a outra não irá mais ser validada.
+salience 10
+    when
+        $invoice : Invoice( 
+							$dueDate : dueDate        ,
+							$cycleCode: cycleCode )
+							
+		$account : Account( $carrierCode : carrierCode , 
+				$cs : carrierState, 
+				$accountType : accountType -> (dueDatesCache.getDueDates($cycleCode, $accountType) == null) 
+		)
+    then	
+		consequenceBuilder.setRule("R47-1","Validação de Data de Vencimento"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($carrierCode));
+
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription("Tipo de Cliente não encontrada para o ciclo.");					
+                                
+        c.addAttribute("TipoCliente",$accountType);        
+        c.addAttribute("Ciclo",$cycleCode);                        
+        c.addDateAttribute("Dia Vencimento Fatura", $dueDate, "dd/MM/yyyy"); 
+        c.addNullAttribute("DataVencimentoTabela");	                  
+        
+        results.add(c);  	    
+end
+
+rule "Regra 47-2" 
+activation-group "R47"
+salience 0
+    when 
+        $invoice : Invoice( $dueDate : dueDate , $cycleCode: cycleCode )	
+		
+		$account : Account( $carrierCode : carrierCode , 
+				$cs : carrierState, 
+				$accountType : accountType -> (!dueDateMatches($invoice, dueDatesCache.getDueDates($cycleCode, $accountType))) 				
+		)
+
+    then	
+    	consequenceBuilder.setRule("R47-2","Validação de Data de Vencimento"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($carrierCode));			
+		
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription("Data de Vencimento da Fatura incompatível com tabela.");					
+		         
+        c.addAttribute("TipoCliente",$accountType);        
+        c.addAttribute("Ciclo",$cycleCode);                        
+        c.addDateAttribute("Dia Vencimento Fatura", $dueDate, "dd/MM/yyyy");  		                                
+        c.addAttribute("DataVencimentoTabela",dueDatesCache.getDueDates($cycleCode, $accountType).getDueDate() , AttributeType.INTEGER, "0");                
+        results.add(c);  	    
+end 

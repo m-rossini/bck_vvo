@@ -1,0 +1,137 @@
+package br.com.auster.rules.vivo.R30;
+
+import br.com.auster.common.lang.NamedHashMap;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.List;
+import java.sql.ResultSet;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.VoiceUsageDetail;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.vivo.billcheckout.consequence.R30ConsequenceHelper;
+import br.com.auster.vivo.billcheckout.caches.vo.ServiceListCodeVO;
+import br.com.auster.vivo.billcheckout.cache.vo.FavoriteVO;
+
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+
+import br.com.auster.common.text.DurationFormat;
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.cache.DataBarnQueryExecutor dtbnQueryExecutor;
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results; 
+
+global br.com.auster.vivo.billcheckout.caches.R30R31ServiceListCodeCache serviceListCodeCache;
+
+
+function void buildR30Consequence(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		String code, String description, VoiceUsageDetail usage, NamedHashMap dupFavMap) {
+		
+		String key = usage.getChannelId() + "_" + usage.getCalledNumber();
+		if (!dupFavMap.containsKey(key)) {
+			dupFavMap.put(key, null);
+			consequenceBuilder.setRule(code, "Tarifação de Favoritos"); 
+			consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+			consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+			consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+			consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+			consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(usage.getInvoice().getAccount().getCarrierCode()));
+		
+			TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+			c.setDescription(description);
+			c.addAttribute("Ciclo", usage.getInvoice().getCycleCode());
+			c.addAttribute("NomeDoServico", usage.getSvcPlan());														
+			c.addAttribute("Terminal", usage.getChannelId());
+			c.addAttribute("Subscrição", usage.getSection().getSubscriptionid());
+			c.addAttribute("Classe da Chamada", usage.getCallClass());
+			c.addAttribute("Operadora da Chamada", usage.getCarrierCode());
+			c.addAttribute("Sub Classe da Chamada", usage.getCallSubclass());
+			c.addAttribute("Tipo de Tarifa", usage.getTariffClass());
+	        c.addDateAttribute("Data Chamada", usage.getDatetime(), "dd/MM/yy");
+	        c.addAttribute("Hora Chamada", DurationFormat.formatFromDate(usage.getDatetime()));
+	        c.addAttribute("Duração Real Chamada", usage.getRealDuration());
+			c.addAttribute("Número Origem", usage.getChannelId());
+			c.addAttribute("Número Destino", ValueFormat.formatPhone(usage.getCalledNumber()));
+			c.addAttribute("Valor Chamada", ValueFormat.formatValue(usage.getTotalAmount()));
+			results.add(c);  
+		}
+}
+
+
+rule "R30-INIT"
+salience 100	
+	when
+		$acc : Account() 
+		
+		not NamedHashMap(name == "FavoritesMap")
+	then
+		R30ConsequenceHelper helper = new R30ConsequenceHelper($acc.getAccountNumber(), $acc.getInvoice().getCycleCode(), $acc.getInvoice().getOriginalCycleStartDate(),$acc.getInvoice().getOriginalCycleEndDate(), dtbnQueryExecutor);
+		NamedHashMap favoriteMap = new NamedHashMap("FavoritesMap", helper.createFavoritesMap());
+		
+		if (favoriteMap.size() >= 0) {
+			insert (favoriteMap);
+			NamedHashMap dupFavMap = new NamedHashMap("DupplicatedFavorite");
+			insert(dupFavMap);
+		}
+end
+
+rule "R30-01"
+salience 50	
+	when
+		$map : NamedHashMap(name == "FavoritesMap")
+		
+		$dupFavMap : NamedHashMap(name == "DupplicatedFavorite")
+		
+		$usage : VoiceUsageDetail(
+			tag in ("510D", "520D"),
+			callClass != ChecklistClasses.CALL_CLASS_AGGREGATE
+		)
+	then
+		boolean isBillingFavorite = false;
+		boolean isRuleFavorite = false;
+
+		// Check is its qualified as favorite by billing
+		String listCode = serviceListCodeCache.get($usage.getSvcPlan()).getListCd();
+		if (("1").equals(listCode) || ("2").equals(listCode) || ("4").equals(listCode)) {
+			isBillingFavorite = true;
+		}
+		
+		// Check is its qualified as favorite by rule
+		HashMap favMap = (HashMap) $map.get($usage.getSection().getSubscriptionid());
+		if (favMap != null) {
+			FavoriteVO favVo = (FavoriteVO) favMap.get($usage.getCalledNumber());
+			if (favVo != null) {
+				if ((favVo.getEffDate().compareTo($usage.getDatetime()) <= 0) &&
+					(favVo.getExpDate().compareTo($usage.getDatetime())	>= 0)){
+						isRuleFavorite = true;
+				}
+			}
+		}
+		
+		//////
+		// Ticket #696 - Validacao foi considerada como invalida
+		// e a Vivo autorizou a remocao no ticket acima.
+		//
+		// if (!isRuleFavorite && isBillingFavorite) {
+		//	buildR30Consequence(results, dimensionCache, consequenceBuilder, "R30-01", "Chamada qualificada como Favoritos indevidamente", $usage, $dupFavMap);
+		//}
+
+		if (isRuleFavorite && !isBillingFavorite) {
+			if ($usage.getTotalAmount() > 0) {
+				buildR30Consequence(results, dimensionCache, consequenceBuilder, "R30-02", "Chamada de Favoritos não qualificada", $usage, $dupFavMap);
+			}
+		}
+end

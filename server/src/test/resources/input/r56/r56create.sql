@@ -1,0 +1,32 @@
+DROP TABLE R56_PRIORITY_ORDER;
+CREATE TABLE R56_PRIORITY_ORDER ("SBSCRP_ID"  VARCHAR2(512),"CAPTN_TEXT"  VARCHAR2(512),"SVC_NAME"  VARCHAR2(512),"PRCNG_PRI" NUMBER(19,0),"SVC_AGRMNT_EFF_DT" DATE,"SVC_AGRMNT_TRMNTN_DT" DATE,"SBSCRP_SVC_EFF_DT" DATE,"SBSCRP_SVC_EXPR_DT" DATE);
+INSERT INTO R56_PRIORITY_ORDER VALUES ('0120077402','GRATIS','MIN BONIFICADOS 100','1',to_date('20070713','yyyymmdd'),to_date('','yyyymmdd'),to_date('20041103','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('0120077402','GRATIS','PAC NAC 1-100','1',to_date('20070713','yyyymmdd'),to_date('','yyyymmdd'),to_date('20041103','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('0120077402','GRATIS','PLANO NAC1 50 MIN','1',to_date('20070713','yyyymmdd'),to_date('','yyyymmdd'),to_date('20041103','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('0120188267','GRATIS','PLANO NOVO PROF 300','1',to_date('20051229','yyyymmdd'),to_date('','yyyymmdd'),to_date('19970411','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('0120575257','GRATIS','RS_VIVOPOS_TURBINADO','1',to_date('20051229','yyyymmdd'),to_date('','yyyymmdd'),to_date('20051229','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326798','GRATIS','+ VIAJANTE 2','1',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326798','GRATIS','AQ NATAL 07 300MIN','1',to_date('20071212','yyyymmdd'),to_date('20080609','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326798','GRATIS','VIVO MAIS 180 TIT RJ','7',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326798','GR햀IS-DSL2','+ VIAJANTE 2','1',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326798','GR햀IS-SMS','VIVO MAIS 180 TIT RJ','7',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326799','GRATIS','+ VIAJANTE 2','1',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326799','GRATIS','AQ NATAL 07 300MIN','1',to_date('20071212','yyyymmdd'),to_date('20080609','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326799','GRATIS','VIVO MAIS 180 TIT RJ','0',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326799','GR햀IS-DSL2','+ VIAJANTE 2','1',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326799','GR햀IS-SMS','VIVO MAIS 180 TIT RJ','0',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326795','GRATIS','+ VIAJANTE 2','2',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326795','GRATIS','AQ NATAL 07 300MIN','3',to_date('20071212','yyyymmdd'),to_date('20080609','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326795','GRATIS','VIVO MAIS 180 TIT RJ','4',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326795','GR햀IS-DSL2','+ VIAJANTE 2','2',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326795','GR햀IS-SMS','VIVO MAIS 180 TIT RJ','4',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326794','GRATIS','+ VIAJANTE 2','3',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326794','GRATIS','AQ NATAL 07 300MIN','2',to_date('20071212','yyyymmdd'),to_date('20080609','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326794','GRATIS','VIVO MAIS 180 TIT RJ','1',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326794','GR햀IS-DSL2','+ VIAJANTE 2','3',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+INSERT INTO R56_PRIORITY_ORDER VALUES ('2022326794','GR햀IS-SMS','VIVO MAIS 180 TIT RJ','1',to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'),to_date('20070913','yyyymmdd'),to_date('','yyyymmdd'));
+insert into r56_priority_order values('0030017822', 'GRATIS', 'BONUS COMP 40', 1, '28-mai-2008', null, '28-mai-2008', null);
+insert into r56_priority_order values('0030017822', 'GRATIS', 'PLANO 15', 7, '28-mai-2008', null,'28-mai-2008', null);
+
+commit;
+  

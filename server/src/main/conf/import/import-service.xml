@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<document name="Service Price" 
+		  encoding-from="ISO-8859-1"
+          max-record-size="32768"
+          buffer-size="512"
+          separator-char="\n">
+	
+<!--
+	
+select
+svc_price_seq_nbr||';'|| svc_name||';'|| comm_svc_area_id||';'|| charge_type_cd ||';'||
+coalesce(member_svc_name,'')||';'||
+svc_price_eff_dt||';'|| coalesce(svc_price_expr_dt,'')||';'||
+coalesce(rate_factor_id, '')||';'|| coalesce(init_charge_period_qty, 0)||';'||
+init_incl_unit_amt||';'|| init_period_unit_cd||';'|| coalesce(init_price_amt, 0.0)||';'||
+coalesce(adtnl_charge_period_qty, 0)||';'|| adtnl_incl_unit_amt||';'|| adtnl_period_unit_cd||';'||
+coalesce(adtnl_price_amt, 0.0)||';'|| price_ngtbl_flag||';'|| coalesce(tax_cat_cd, '0')||';'||
+coalesce(rtrim(to_char(usage_acum_seq_nbr, '999999999')),'')||';'||
+coalesce(free_usage_across_acct_ind, '') as exported_row
+from tb_service_price
+
+	
+-->	
+	
+	<element name="service_and_price" separator=";">
+		<attribute name="price-id" 			index="1"/>
+		<attribute name="service-external-id" 		index="2"/>
+		<attribute name="csa-code" 			index="3"/>
+		<attribute name="charge-type" 		index="4"/>
+		<attribute name="service-name"		index="5"/>
+		<attribute name="effective-date" 	index="6"/>
+		<attribute name="expiration-date" 	index="7"/>
+		<attribute name="price-custom-1"	index="8"/>
+		<attribute name="initial-qty" 		index="9"/>
+		<attribute name="initial-unit" 		index="10"/>
+		<attribute name="initial-type" 		index="11"/>
+		<attribute name="initial-cost" 		index="12"/>
+		<attribute name="step-qty"	 		index="13"/>
+		<attribute name="step-unit" 		index="14"/>
+		<attribute name="step-type" 		index="15"/>
+		<attribute name="step-cost" 		index="16"/>
+		<attribute name="negotiable-flag" 	index="17"/>
+		<attribute name="tax-code" 			index="18"/>
+		<attribute name="free-units-id"		index="19"/>
+		<attribute name="share-mode"		index="20"/>
+		<attribute name="pass-thru"		index="21"/>		
+		<attribute name="invoice-caption"		index="22"/>
+		<attribute name="price-custom-2"		index="23"/>
+		<attribute name="price-custom-3"		index="24"/>
+		<attribute name="charge-type-id"		index="25"/>
+	</element>
+	
+</document>

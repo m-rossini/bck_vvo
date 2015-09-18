@@ -1,0 +1,445 @@
+package br.com.auster.rules.vivo.R69_82;
+
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Date;
+
+import br.com.auster.om.invoice.Address;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.SectionDetail;
+import br.com.auster.om.invoice.OneTimeEventDetail;
+import br.com.auster.common.util.DateUtils;
+
+import br.com.auster.vivo.billcheckout.cache.vo.InterestFeeVO;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+
+import br.com.auster.common.rules.GlobalForLog;
+
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoDimensionsFacade;
+import br.com.auster.vivo.billcheckout.consequence.R69R82ConsequenceHelper;
+import br.com.auster.vivo.billcheckout.caches.vo.HolidayDateVO;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.cache.DataBarnInterestFeeServices dbservicesIF;
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.vivo.billcheckout.caches.R69R82CityHolidayCache cityHolidayDateService;
+global br.com.auster.vivo.billcheckout.caches.R69R82StateHolidayCache stateHolidayDateService;
+global br.com.auster.vivo.billcheckout.caches.R69R82CountryHolidayCache countryHolidayDateService;
+global br.com.auster.vivo.billcheckout.caches.ZipCodeCache zipCodeCache;
+global java.util.List results; 
+
+
+function void buildR08Consequence(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 String ruleNbr, String desc, String carrierCode, Double calcIntrs, Double calcPenlt, 
+		 Double chargIntrsSIRS, Double chargPenaltSIRS, Double chargIntrsDTBN, Double chargPenaltDTBN, 
+		 Double totalAmt, Double docAmt, Date payDate, Date duePayDate, Date calcDuePayDate, 
+		 String cycleCode, Date cycleCutDate) {		 
+	consequenceBuilder.setRule(ruleNbr,"Multa e Juros Indevido"); 
+	consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+	consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+	consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+	consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+	consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(carrierCode));
+			
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(desc);					
+	
+	if (cycleCode == null)	c.addNullAttribute("Ciclo");
+	else c.addStringAttribute("Ciclo", cycleCode);
+	
+	if (cycleCutDate == null)	c.addNullAttribute("Data Corte Ciclo");
+	else c.addDateAttribute("Data Corte Ciclo", cycleCutDate, "dd/MM/yyyy");
+	
+	if (calcDuePayDate == null)	c.addNullAttribute("Data Vencimento Alterada Ferramenta");
+	else c.addDateAttribute("Data Vencimento Alterada Ferramenta", calcDuePayDate, "dd/MM/yyyy");
+	
+	if (calcIntrs == null) c.addNullAttribute("Valor Juros Calculado");
+	else c.addAttribute("Valor Juros Calculado", ValueFormat.formatValue(calcIntrs));
+	
+	if (calcPenlt == null) c.addNullAttribute("Valor Multa Calculado");
+	else c.addAttribute("Valor Multa Calculado", ValueFormat.formatValue(calcPenlt));
+	
+	if (chargIntrsSIRS == null)	c.addNullAttribute("Valor Juros SIRS");
+	else c.addAttribute("Valor Juros SIRS", ValueFormat.formatValue(chargIntrsSIRS));
+	
+	if (chargPenaltSIRS == null) c.addNullAttribute("Valor Multa SIRS");
+	else c.addAttribute("Valor Multa SIRS", ValueFormat.formatValue(chargPenaltSIRS));
+	
+	if (chargIntrsDTBN == null)	c.addNullAttribute("Valor Juros DTBN");
+	else c.addAttribute("Valor Juros DTBN", ValueFormat.formatValue(chargIntrsDTBN));
+	
+	if (chargPenaltDTBN == null) c.addNullAttribute("Valor Multa DTBN");
+	else c.addAttribute("Valor Multa DTBN", ValueFormat.formatValue(chargPenaltDTBN));
+	
+	if (totalAmt == null) c.addNullAttribute("Valor Total Fatura");
+	else c.addAttribute("Valor Total Fatura", ValueFormat.formatValue(totalAmt));
+	
+	if (docAmt == null) c.addNullAttribute("Valor Base do Cálculo Multa/Juro");
+	else c.addAttribute("Valor Base do Cálculo Multa/Juro", ValueFormat.formatValue(docAmt));
+	
+	if (payDate == null) c.addNullAttribute("Data Pagamento");
+	else c.addDateAttribute("Data Pagamento", payDate, "dd/MM/yyyy");
+	
+	if (duePayDate == null)	c.addNullAttribute("Data Vencimento");	
+	else c.addDateAttribute("Data Vencimento", duePayDate, "dd/MM/yyyy");
+	
+	if (calcDuePayDate == null)	c.addNullAttribute("Data Vencimento Alterada Ferramenta");
+	else c.addDateAttribute("Data Vencimento Alterada Ferramenta", calcDuePayDate, "dd/MM/yyyy");
+								
+	
+	results.add(c);	
+}
+
+/******
+** Regra 69_82-INIT
+** Initialize the rule loading the
+** InterestFee DTBN data in the SHMemory 
+*/
+rule "Regra 69_82-INIT"
+	salience 90
+	when
+        $acct : Account( $acctNumber : accountNumber )
+        $inv  : Invoice( 
+        		  account == $acct 
+        		, $cycleCode : cycleCode
+        		, $cycleEnd : originalCycleEndDate 
+        		, $cycleStart : originalCycleStartDate )
+	then		
+	    if (dbservicesIF == null) {
+	    	return;
+    	}    	
+        List interestFee = 
+        	dbservicesIF.getInterestRecordsFor( "InterestFee", 
+        	new Object[] {$acctNumber, $acctNumber, $cycleCode, $cycleStart, $cycleEnd} );
+        
+        Iterator it;        	
+        for( it = interestFee.iterator(); it.hasNext(); ) {
+        	Object obj = it.next();
+            insert( obj );
+        }
+end
+
+/******
+** Regra 69_82-01
+** Verify if the penalty was found in the SIRS 
+** but does not exists in the DTBN
+*/
+rule "Regra 69_82-01" 
+	when
+		$acct    : Account( $acctNumber : accountNumber, $carrierCode : carrierCode )
+	    $invoice : Invoice( $cycleStart : cycleStartDate , 
+	    					account == $acct , 
+	    					$cycleEnd : cycleEndDate, 
+	    					$cycleCode: cycleCode,  
+	    					$invoiceTotalAmount: totalAmount,
+	    					$invoiceDueDate: dueDate )	    
+	    $charge  : SectionDetail ( 
+	    	elementType  == "MULTAS_JUROS_DETAIL", 
+		    $caption : caption -> ($caption.indexOf("MULTA") > 0) ,
+	    	invoice == $invoice,  
+	    	$penaltyAmount : totalAmount > 0 )
+	    	
+	    not (InterestFeeVO( 
+	    		accountNumber == $acctNumber
+	    		,$vocc : carrierCode == ($caption.substring(0, 2)) 
+	            ,$feeType: feeType -> ($feeType.startsWith("PNLTY"))	    		
+	    		,$feeAmt : feeAmount 
+	    		,$docamt: receivableAmount
+	    		,$totalFatura : documentAmount 
+	    		,$docdate: dueFeeDate -> ( $docdate.after($cycleEnd))))	    		                                   
+	then	
+		buildR08Consequence(results, dimensionCache, consequenceBuilder, 
+		 "R69_82-01", "Multa com registro na Fatura e sem registro no DataBarn.", 
+		 $carrierCode, null, null, null, $penaltyAmount, null, null, $invoiceTotalAmount, null, 
+		 null, null, null, $cycleCode, $cycleEnd);	
+end
+
+
+/******
+** Regra 69_82-02
+** Verify if the fee was found in the SIRS 
+** but does not exists in the DTBN
+*/
+rule "Regra 69_82-02" 
+	when
+		$acct    : Account( $acctNumber : accountNumber, $carrierCode : carrierCode )
+	    $invoice : Invoice( $cycleStart : cycleStartDate , 
+	    					account == $acct , 
+	    					$cycleEnd : cycleEndDate, 
+	    					$cycleCode: cycleCode,  
+	    					$invoiceTotalAmount: totalAmount,
+	    					$invoiceDueDate: dueDate )	    
+	    $charge  : SectionDetail ( 
+	    	elementType  == "MULTAS_JUROS_DETAIL", 
+		    $caption : caption -> ($caption.indexOf("JUROS") > 0) ,
+	    	invoice == $invoice,  
+	    	$penaltyAmount : totalAmount > 0 )
+	    	
+	    not (InterestFeeVO( 
+	    		accountNumber == $acctNumber
+	    		,$vocc : carrierCode == ($caption.substring(0, 2)) 
+	            ,$feeType: feeType -> ($feeType.startsWith("INTRST"))	    		
+	    		,$feeAmt : feeAmount 
+	    		,$docamt: receivableAmount
+	    		,$totalFatura : documentAmount 
+	    		,$docdate: dueFeeDate -> ( $docdate.after($cycleEnd))))	    		                                   
+	then		
+		buildR08Consequence(results, dimensionCache, consequenceBuilder, 
+		 "R69_82-02", "Juros com registro na Fatura e sem registro no DataBarn.", 
+		 $carrierCode, null, null, $penaltyAmount, null, null, null, $invoiceTotalAmount, null, 
+		 null, null, null, $cycleCode, $cycleEnd); 
+end
+
+/******
+** Regra 69_82-03
+** Verify if the charge was found in the DTBN 
+** but does not exists in the SIRS
+*/
+rule "Regra 69_82-03" 
+	when
+	
+		$acct    : Account( $acctNumber : accountNumber, $carrierCode : carrierCode )
+	    $invoice : Invoice( $cycleStart : cycleStartDate , account == $acct , $cycleEnd : cycleEndDate, $cycleCode: cycleCode )		    	
+	    InterestFeeVO( 
+	    		accountNumber == $acctNumber
+	    		,$vocc : carrierCode 
+	            ,$feeType: feeType -> ($feeType.startsWith("INTRST"))	    		
+	    		,$feeAmt : feeAmount 
+	    		,$docamt: receivableAmount
+	    		,$totalFatura : documentAmount 
+			    ,$payDate : paymentDate 
+			    ,$payDueDate : dueDatePayment 
+	    		,$docdate: dueFeeDate -> ( $docdate.after($cycleEnd)))
+	    			    		    
+	    not (SectionDetail ( 
+	    	 elementType  == "MULTAS_JUROS_DETAIL", 
+		     $caption : caption -> ($caption.indexOf("JUROS") > 0 && (caption.substring(0, 2)).equals($vocc)),		     
+	    	 invoice == $invoice,
+	    	 $penaltyAmount : totalAmount > 0 ))	    		
+	then	
+		double percentageFee = 0.01;
+		double days = DateUtils.difference($payDueDate, $payDate, 'd' );
+		double simpleProRate = days / 30;
+		double calculated = percentageFee * $docamt * simpleProRate;
+		double rounded = (double) Math.round(calculated * 100) / 100;
+	
+	
+		buildR08Consequence(results, dimensionCache, consequenceBuilder, 
+		 "R69_82-03", "Juro com registro no DataBarn e sem registro na Fatura.", 
+		 $carrierCode, null, null, null, null, rounded, null, $totalFatura, $docamt, 
+		 $payDate, $payDueDate, null, $cycleCode, $cycleEnd);
+end
+
+
+/******
+** Regra 69_82-04
+** Verify if the charge was found in the DTBN 
+** but does not exists in the SIRS
+*/
+rule "Regra 69_82-04" 
+	when
+	
+		$acct    : Account( $acctNumber : accountNumber, $carrierCode : carrierCode )
+	    $invoice : Invoice( $cycleStart : cycleStartDate , account == $acct , $cycleEnd : cycleEndDate, $cycleCode: cycleCode )		    	
+	    InterestFeeVO( 
+	    		accountNumber == $acctNumber
+	    		,$vocc : carrierCode 
+	            ,$feeType: feeType -> ($feeType.startsWith("PNLTY"))	    		
+	    		,$feeAmt : feeAmount 
+	    		,$docamt: receivableAmount
+	    		,$totalFatura : documentAmount 
+			    ,$payDate : paymentDate  
+			    ,$payDueDate : dueDatePayment
+	    		,$docdate: dueFeeDate -> ( $docdate.after($cycleEnd)))
+	    			    		    
+	    not (SectionDetail ( 
+	    	 elementType  == "MULTAS_JUROS_DETAIL", 
+		     $caption : caption -> ($caption.indexOf("MULTA") > 0 && (caption.substring(0, 2)).equals($vocc)),		     
+	    	 invoice == $invoice,
+	    	 $penaltyAmount : totalAmount > 0 ))	    		
+	then
+		buildR08Consequence(results, dimensionCache, consequenceBuilder, 
+		 "R69_82-04", "Multa com registro no DataBarn e sem registro na Fatura.", 
+		 $carrierCode, null, null, null, null, null, $feeAmt, $totalFatura, $docamt, 
+		 $payDate, $payDueDate, null, $cycleCode, $cycleEnd); 
+end
+
+/******
+** Regra 69_82-05
+** Validate the value of the SIRS penalty
+** against the DTBN value
+*/
+rule "Regra 69_82-05" 
+	when
+	    $acct    : Account( $acctNumber : accountNumber, $carrierCode : carrierCode )
+	    $invoice : Invoice( $cycleStart : cycleStartDate , account == $acct , $cycleEnd : cycleEndDate, $cycleCode: cycleCode )
+	    
+	    $chargeOM  : SectionDetail ( 
+	    	elementType  == "MULTAS_JUROS_DETAIL", 
+		    $caption : caption -> ($caption.indexOf("MULTA") > 0) ,
+	    	invoice == $invoice,  
+	    	$penaltyAmount : totalAmount > 0 )
+	    	
+	    $chargeVO  : InterestFeeVO( 
+	    		accountNumber == $acctNumber
+	    		,$vocc : carrierCode == ($caption.substring(0, 2)) 
+	            ,$feeType: feeType -> ($feeType.startsWith("PNLTY"))	    		
+	    		,$feeAmt : feeAmount 
+	    		,$docamt: receivableAmount
+	    		,$docdate: feeDate   
+			    ,$payDate : paymentDate 
+			    ,$payDueDate : dueDatePayment
+	    		,$totalFatura : documentAmount )
+	then	
+		double percentageFee = 0.02;
+		double calculated = percentageFee * $docamt;
+		
+		if ( Math.abs(Math.abs(calculated) - Math.abs($penaltyAmount)) > 0.01 ) {
+			buildR08Consequence(results, dimensionCache, consequenceBuilder, 
+			 "R69_82-05", "Cálculo de Multa divergente da Fatura.", 
+			 $carrierCode, null, calculated, null, $penaltyAmount, null, $feeAmt, $totalFatura, $docamt, 
+			 $payDate, $payDueDate, null, $cycleCode, $cycleEnd); 				
+		}
+end
+
+/******
+** Regra 69_82-06
+** Validate the value of the SIRS Interest
+** against the DTBN value
+*/
+rule "Regra 69_82-06" 
+	when
+	    $acct    : Account( $acctNumber : accountNumber, $carrierCode : carrierCode )
+	    $invoice : Invoice( $cycleStart : cycleStartDate , account == $acct , $cycleEnd : cycleEndDate, $cycleCode: cycleCode)
+	    
+	    $chargeOM  : SectionDetail ( 
+	    	elementType  == "MULTAS_JUROS_DETAIL", 
+		    $caption : caption -> ($caption.indexOf("JUROS") > 0) ,
+	    	invoice == $invoice,  
+	    	$penaltyAmount : totalAmount > 0 )
+	       	    
+	    $chargeVO  : InterestFeeVO( 
+	    		accountNumber == $acctNumber
+	    		,$vocc : carrierCode == ($caption.substring(0, 2))
+				,$docdate: feeDate 	    		
+	    		,$feeAmt : feeAmount 
+	            ,$feeType: feeType -> ($feeType.startsWith("INTRST"))
+	    		,$docamt: receivableAmount
+			    ,$payDate : paymentDate 
+			    ,$payDueDate : dueDatePayment
+	    		,$totalFatura : documentAmount			     	    		
+	    		)
+	then	
+		double percentageFee = 0.01;
+		double days = DateUtils.difference($payDueDate, $payDate, 'd' );
+		double simpleProRate = days / 30;
+		double calculated = percentageFee * $docamt * simpleProRate;
+		double rounded = (double) Math.round(calculated * 100) / 100;
+
+		if ( Math.abs(Math.abs(rounded) - Math.abs($penaltyAmount)) > 0.01 ) {		
+			buildR08Consequence(results, dimensionCache, consequenceBuilder, 
+			 "R69_82-06", "Cálculo de Juros divergente da Fatura.", 
+			 $carrierCode, calculated, null, $penaltyAmount, null, $feeAmt, null,
+			 $totalFatura, $docamt, $payDate, $payDueDate, null, $cycleCode, $cycleEnd); 						
+		}
+end
+
+
+/******
+** Regra 69_82-07
+** Validate if the Atlys system
+** incorrectly added a fee when the due date
+** selected is a holiday or weakend.
+*/
+rule "Regra 69_82-07" 
+	when
+	    $acct    : Account( $acctNumber : accountNumber, $carrierCode : carrierCode, $address: addresses , $state: accountState )
+	    $invoice : Invoice( $cycleStart : cycleStartDate , account == $acct , $cycleEnd : cycleEndDate, $cycleCode: cycleCode )
+	    $chargeVO  : InterestFeeVO( 
+	    		accountNumber == $acctNumber
+				,$docdate: feeDate
+	    		,$feeAmt : feeAmount
+	    		,$docamt: receivableAmount
+			    ,$payDate : paymentDate 
+			    ,$payDueDate : dueDatePayment
+	    		,$totalFatura : documentAmount
+	    		,$feeType: feeType			     	    		
+	    		)
+	then
+	Map addressMap = $address; 
+	
+	if (!addressMap.isEmpty()) {
+		Address address = (Address) addressMap.values().iterator().next();
+		
+		if (address.getPostalCode() == null || 
+		    address.getPostalCode().equals("") || 
+		    address.getPostalCode().length() < 8) {
+			return; 
+		}
+			
+		String postalCode = address.getPostalCode().substring(0, 8);
+		String city = zipCodeCache.get(postalCode);
+		
+		if (city == null) return;
+		
+		R69R82ConsequenceHelper consequenceHelper = new R69R82ConsequenceHelper(cityHolidayDateService, stateHolidayDateService, countryHolidayDateService);
+		HolidayDateVO holiday = consequenceHelper.findHolidayData($state, city, $payDueDate);
+		
+		if (holiday != null) {
+			Date nextWorkDate = holiday.getNextWorkDay();
+
+			if (!$payDate.after(nextWorkDate)){
+			
+				if ($feeType.startsWith("INTRST")){
+					buildR08Consequence(results, dimensionCache, consequenceBuilder, 
+				 	"R69_82-07", "Juro com registro no DataBarn indevidamente (feriado)", 
+				 	$carrierCode, null, null, null, null, $feeAmt, null, $totalFatura, $docamt, 
+				 	$payDate, $payDueDate, nextWorkDate, $cycleCode, $cycleEnd);	
+				 }
+				 else {
+				 	buildR08Consequence(results, dimensionCache, consequenceBuilder, 
+				 	"R69_82-08", "Multa com registro no DataBarn indevidamente (feriado)", 
+				 	$carrierCode, null, null, null, null, null, $feeAmt, $totalFatura, $docamt, 
+				 	$payDate, $payDueDate, nextWorkDate, $cycleCode, $cycleEnd);
+				 }
+			}
+		}
+		else {
+			Date nextWorkDate = null;
+			
+			if (consequenceHelper.isWeekendDay($payDueDate)) {
+				nextWorkDate = consequenceHelper.findNextWorkingDay($state, city, $payDueDate);
+				
+				if (!$payDate.after(nextWorkDate)){									 
+					if ($feeType.startsWith("INTRST")){
+						buildR08Consequence(results, dimensionCache, consequenceBuilder, 
+						"R69_82-07", "Juro com registro no DataBarn indevidamente (final de semana)", 
+					 	$carrierCode, null, null, null, null, $feeAmt, null, $totalFatura, $docamt, 
+					 	$payDate, $payDueDate, nextWorkDate, $cycleCode, $cycleEnd);	
+					}
+					else {
+					 	buildR08Consequence(results, dimensionCache, consequenceBuilder, 
+					 	"R69_82-08", "Multa com registro no DataBarn indevidamente (final de semana)", 
+					 	$carrierCode, null, null, null, null, null, $feeAmt, $totalFatura, $docamt, 
+					 	$payDate, $payDueDate, nextWorkDate, $cycleCode, $cycleEnd);
+					}				 
+				}
+			}
+		}
+	}
+end

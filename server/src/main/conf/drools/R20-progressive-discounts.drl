@@ -1,0 +1,592 @@
+package br.com.auster.rules.vivo.R20;
+
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Iterator;
+import java.util.HashMap;
+
+import java.util.concurrent.atomic.AtomicLong;
+import br.com.auster.common.lang.NamedHashMap;
+import br.com.auster.common.lang.NamedDouble;
+
+import br.com.auster.om.invoice.BarCode;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.VoiceUsageDetail;
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.om.util.UnitCounter;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.ServiceDetail;
+
+import br.com.auster.om.pricing.ServicePrice;
+import br.com.auster.om.pricing.ServiceFreeUnits;
+import br.com.auster.om.pricing.TaxCategory;
+import br.com.auster.om.pricing.TaxRate;
+
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+
+import br.com.auster.vivo.billcheckout.hierarchy.HierarchyHelper;
+import br.com.auster.vivo.billcheckout.hierarchy.HierarchyInfo;
+import br.com.auster.vivo.billcheckout.hierarchy.HierarchySubscriptionInfo;
+import br.com.auster.vivo.billcheckout.hierarchy.HierarchyUsageInfo;
+import br.com.auster.vivo.billcheckout.hierarchy.TotalAccumulator;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import java.util.Collection;
+import java.util.ArrayList;
+import java.util.Set;
+
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.vivo.billcheckout.cache.SubscriptionStatusServices subscriptionStatusServices;
+global br.com.auster.vivo.billcheckout.hierarchy.HierarchyHelper hierarchyHelper;
+
+global java.util.List results;
+
+function TelcoConsequence buildR20HierarchyConsequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		HierarchyInfo hirchInfo, String hierarchyId, HierarchySubscriptionInfo subInfo, String code, String description, long totTerminais, double multDesc, double totCalc) {
+	consequenceBuilder.setRule(code, "Desconto Progressivo de Assinatura de Plano"); 
+	consequenceBuilder.setAccount(hirchInfo.getAccount());
+	consequenceBuilder.setGeographics(hirchInfo.getGeographics());		
+	consequenceBuilder.setTime(hirchInfo.getTime());		
+	consequenceBuilder.setCycle(hirchInfo.getCycle());	
+	consequenceBuilder.setCarrier(subInfo.getCarrier());
+
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(description);
+	if (hierarchyId == HierarchyInfo.NO_HIERARCHY) {
+		c.addNullAttribute("ID da Hierarquia");
+	} else {
+		c.addAttribute("ID da Hierarquia", hierarchyId);
+	}
+	c.addAttribute("NomeDoServico", subInfo.getServiceName());
+	c.addAttribute("Terminal", subInfo.getTerminal());
+    c.addAttribute("Total de Terminais com Plano", ValueFormat.formatQuantity(totTerminais));
+    c.addAttribute("Multiplicador de Desconto", ValueFormat.formatValue(multDesc));
+    c.addAttribute("Valor Cobrado", ValueFormat.formatValue(subInfo.getTotalAmount()));
+    c.addAttribute("Valor Calculado", ValueFormat.formatValue(totCalc));  
+    return c;
+}
+
+function TelcoConsequence buildR20HierarchyUsageConsequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		HierarchyInfo hirchInfo, String hierarchyId, HierarchyUsageInfo usage, String code, String description, String serviceName, String totalAttributeName, double totalUsage, double multDesc, double totCalc) {
+	consequenceBuilder.setRule(code, "Desconto Progressivo de Assinatura de Plano"); 
+	consequenceBuilder.setAccount(hirchInfo.getAccount());
+	consequenceBuilder.setGeographics(hirchInfo.getGeographics());		
+	consequenceBuilder.setTime(hirchInfo.getTime());		
+	consequenceBuilder.setCycle(hirchInfo.getCycle());	
+	consequenceBuilder.setCarrier(usage.getCarrier());
+
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(description);
+	if (hierarchyId == HierarchyInfo.NO_HIERARCHY) {
+		c.addNullAttribute("ID da Hierarchia");
+	} else {
+		c.addAttribute("ID da Hierarchia", hierarchyId);
+	}
+	c.addAttribute("NomeDoServico", serviceName);
+	c.addAttribute(totalAttributeName, totalUsage);
+	//c.addAttribute("Terminal", usage.getTerminal());
+    //c.addAttribute("Total de Terminais com Plano", ValueFormat.formatQuantity(totTerminais));
+    c.addAttribute("Multiplicador de Desconto", ValueFormat.formatValue(multDesc));
+    c.addAttribute("Valor Cobrado", ValueFormat.formatValue(usage.getTotalAmount()));
+    c.addAttribute("Valor Calculado", ValueFormat.formatValue(totCalc));  
+    return c;
+}
+
+rule "R20-INIT"
+	salience 20
+	when	
+		not NamedHashMap( name == "R20HirchFlag" )
+		Account( $accNbr : accountNumber )
+		Invoice( $endDate   : originalCycleEndDate,
+				 $startDate : originalCycleStartDate )
+	then
+		Set<String> hierarchyIds = subscriptionStatusServices.getHierarchyIds("R20_AccHirch", $accNbr, $endDate, $startDate);
+		NamedHashMap hirch  = new NamedHashMap("R20HirchFlag");
+		if (!hierarchyIds.isEmpty()) {
+			hirch.put("hierarchy.id.set", hierarchyIds);
+		}
+		insert(hirch);
+		insert(hierarchyHelper.buildHierarchyInfo(dimensionCache));
+end
+
+rule "Regra R20-Filter and add subscription info"
+	salience 15
+	when
+		$hierarchyHolder : NamedHashMap( name == "R20HirchFlag" )
+		eval ( $hierarchyHolder.get("hierarchy.data.map") == null )
+		$hierarchyInfo : HierarchyInfo( subscriptionsProcessed == false )
+		$subscriptions : ArrayList( $size : size > 0 )
+        	from collect(
+				Section(
+					elementType == "SUBSCRIPTION_INFO", 
+  					totalAmount > 0,
+  					planName in (
+  						"EMPRESA MASTER 160",
+						"EMPRESA MASTER 80",
+						"FREE COMPANY 30",
+						"FREE COMPANY 80",
+						"PLANO EMPRESA"
+  					)
+				)
+			)
+	then
+		for (Section subscriptionSection : (Collection<Section>) $subscriptions) {
+			String servicePlan = subscriptionSection.getPlanName();
+			for (Section subSection : (Collection<Section>) subscriptionSection.getSubSections()) {
+				if ("ACTIVATION_TOTAL".equals(subSection.getElementType())) {
+					for (ServiceDetail subscriptionService : (Collection<ServiceDetail>) subSection.getDetails()) {
+						if (subscriptionService.getTotalAmount() > 0.0) {
+							hierarchyHelper.addSubscription($hierarchyInfo, dimensionCache, subscriptionService, servicePlan);
+						}
+					}
+				}
+			}
+		}
+		$hierarchyInfo.setSubscriptionsProcessed(true);
+		update($hierarchyInfo);
+end
+
+rule "Regra R20-Filter and add subscription info for 2.5G data services"
+	salience 15
+	when
+		$hierarchyHolder : NamedHashMap( name == "R20HirchFlag" )
+		eval ( $hierarchyHolder.get("hierarchy.data.map") == null )
+		$hierarchyInfo : HierarchyInfo( dataServices.empty == true )
+		$subscriptions : ArrayList( size > 0 )
+        	from collect(
+            	ServiceDetail(
+            		elementType  == "ADDITIONAL_SERVICES_DETAIL",
+  					totalAmount > 0,
+  					caption in (
+  						"PROMO ZAP VPN", "VIVO ZAP 1 MB EMP", "ISP VIVO",
+						"VIVO ZAP 10MB EMP", "VIVO ZAP 1GB EMP", "VIVO ZAP 1MB EMP",
+						"VIVO ZAP 2MB EMP", "VIVO ZAP 40MB EMP", "VIVO ZAP 4MB EMP",
+						"INT MOVEL 10MB CORP", "INT MOVEL 120MB CORP", "INT MOVEL 40MB CORP",
+						"INTERNET MOVEL 10MB", "INTERNET MOVEL 120MB", "INTERNET MOVEL 40MB",
+						"VIVO ZAP 1GB TIT", "VIVO ZAP 10 MB TIT"
+  					)
+          		)
+			)
+	then
+		hierarchyHelper.addDataServices($hierarchyInfo, dimensionCache, $subscriptions);
+		update($hierarchyInfo);
+end
+
+rule "Regra R20-Filter and add usage info for Free Company"
+	salience 15
+	when
+		$hierarchyHolder : NamedHashMap( name == "R20HirchFlag" )
+		eval ( $hierarchyHolder.get("hierarchy.data.map") == null )
+		$hierarchyInfo : HierarchyInfo( freeCompanyUsages.empty == true )
+        $usages : ArrayList( size > 0 )
+             from collect(
+             		UsageDetail(
+             				callClass == ChecklistClasses.CALL_CLASS_VC1H,
+             				callSubclass == ChecklistClasses.CALL_SUBCLASS_MF,
+             				svcPlan in ("FREECOMPANY30", "FREECOMPANY80"),
+             				totalAmount > 0
+             		)
+             )
+	then
+		hierarchyHelper.addFreeCompanyUsages($hierarchyInfo, dimensionCache, $usages);
+		update($hierarchyInfo);
+end
+
+rule "Regra R20-Filter and add usage info for Plano Empresa"
+	salience 15
+	when
+		$hierarchyHolder : NamedHashMap( name == "R20HirchFlag" )
+		eval ( $hierarchyHolder.get("hierarchy.data.map") == null )
+		$hierarchyInfo : HierarchyInfo( planoEmpresaUsages.empty == true )
+		Account( accountState in ("RJ", "ES") )
+        $usages : ArrayList( size > 0 )
+             from collect(
+             		UsageDetail(
+             				(	tag in ("510D", "520D", "665D")
+             				|| (tag == "680D" && callSubclass == ChecklistClasses.CALL_SUBCLASS_PORTALVOZ)
+             				),
+             				svcPlan == "PLANO EMPRESA",
+             				objectType != "A",
+             				totalAmount > 0
+             		)
+             )
+	then
+		hierarchyHelper.addPlanoEmpresaUsages($hierarchyInfo, dimensionCache, $usages);
+		update($hierarchyInfo);
+end
+
+rule "Regra R20-Setup non-hierarchy account"
+	salience 10
+	when
+		$hierarchyHolder : NamedHashMap( name == "R20HirchFlag" )
+		eval (
+			$hierarchyHolder.get("hierarchy.id.set") == null &&
+			$hierarchyHolder.get("hierarchy.data.map") == null
+		)
+		$hierarchyInfo : HierarchyInfo( empty == false )
+	then
+		Collection<HierarchyInfo> hierarchyData = new ArrayList<HierarchyInfo>(1);
+		hierarchyData.add($hierarchyInfo);
+		Map<String, Collection<HierarchyInfo>> hierarchyDataMap = new HashMap<String, Collection<HierarchyInfo>>();
+		hierarchyDataMap.put(HierarchyInfo.NO_HIERARCHY, hierarchyData);
+		$hierarchyHolder.put("hierarchy.data.map", hierarchyDataMap);
+		update($hierarchyHolder);
+end
+
+rule "Regra R20-Load full account hierarchy"
+	salience 10
+	when
+		$hierarchyHolder : NamedHashMap( name == "R20HirchFlag" )
+		eval (
+			$hierarchyHolder.get("hierarchy.id.set") != null &&
+			$hierarchyHolder.get("hierarchy.data.map") == null
+		)
+		$hierarchyInfo : HierarchyInfo()
+		Account( $accNbr : accountNumber )
+		Invoice( $endDate   : originalCycleEndDate,
+				 $startDate : originalCycleStartDate )
+	then
+		Set<String> hierarchyIds = (Set<String>) $hierarchyHolder.get("hierarchy.id.set");
+		Map<String, Collection<HierarchyInfo>> hierarchyDataMap =
+			hierarchyHelper.collectHierarchyAccounts(hierarchyIds, $accNbr, $startDate, $endDate, $hierarchyInfo);
+		if (hierarchyDataMap != null && !hierarchyDataMap.isEmpty()) { // hierarchy is complete
+			$hierarchyHolder.put("hierarchy.data.map", hierarchyDataMap);
+			update($hierarchyHolder);
+		}
+end
+
+rule "Regra R20-Process Hierarchy"
+	salience 10
+	when
+		$hierarchyHolder : NamedHashMap( name == "R20HirchFlag" )
+		eval ( $hierarchyHolder.get("hierarchy.data.map") != null )
+		Account( $accState : accountState )
+	then
+		Map<String, Collection<HierarchyInfo>> hierarchyDataMap =
+			(Map<String, Collection<HierarchyInfo>>) $hierarchyHolder.get("hierarchy.data.map");
+		for (Entry<String, Collection<HierarchyInfo>> hierarchyEntry : hierarchyDataMap.entrySet()) {
+			String hierarchyId = hierarchyEntry.getKey();
+			Collection<HierarchyInfo> hierarchyData = hierarchyEntry.getValue();
+
+			// Subscription processing
+			Map<String, Collection<HierarchySubscriptionInfo>> subscriptionPlanMap = new HashMap<String, Collection<HierarchySubscriptionInfo>>();
+			Map<String, HierarchyInfo> subscriptionMap = new HashMap<String, HierarchyInfo>();
+			for (HierarchyInfo hierarchyInfo : hierarchyData) {
+				for (HierarchySubscriptionInfo subInfo : hierarchyInfo.getSubscriptions()) {
+					if (!subscriptionStatusServices.isSubscriptionBlocked("R20_BlockedSubscription", subInfo.getId())){
+						subscriptionMap.put(subInfo.getId(), hierarchyInfo);
+						String servicePlan = subInfo.getServicePlan();
+						Collection<HierarchySubscriptionInfo> subs = subscriptionPlanMap.get(servicePlan);
+						if (subs == null) {
+							subs = new ArrayList<HierarchySubscriptionInfo>();
+							subscriptionPlanMap.put(servicePlan, subs);
+						}
+						subs.add(subInfo);
+					}
+				}
+			}
+			for (Entry<String, Collection<HierarchySubscriptionInfo>> entry : subscriptionPlanMap.entrySet()) {
+				String servicePlan = entry.getKey();
+				Collection<HierarchySubscriptionInfo> subscriptions = entry.getValue();
+				int total = subscriptions.size();
+				double dscnt = 1 - 0.0;
+				String code = null;
+				String description = null;
+				if ("EMPRESA MASTER 80".equals(servicePlan)) {
+					if ("RJ".equals($accState)) {
+						code = "R20-0";
+						description = "Desconto Progressivo Empresa Master 80 (RJ)"; 
+						if (total > 200)	  { dscnt = (1 - 0.3065); }
+						else if (total > 100) { dscnt = (1 - 0.2944); }
+						else if (total > 50)  { dscnt = (1 - 0.2843); }
+						else if (total > 25)  { dscnt = (1 - 0.2359); }
+						else if (total > 15)  { dscnt = (1 - 0.2218); }
+						else if (total > 10)  { dscnt = (1 - 0.1230); }
+						else if (total > 5)   { dscnt = (1 - 0.0081); }
+					} else if ("ES".equals($accState)) {
+						code = "R20-2";
+						description = "Desconto Progressivo Empresa Master 80 (ES)"; 
+						if (total > 200)	  { dscnt = (1 - 0.3096); }
+						else if (total > 100) { dscnt = (1 - 0.2966); }
+						else if (total > 50)  { dscnt = (1 - 0.2879); }
+						else if (total > 25)  { dscnt = (1 - 0.2360); }
+						else if (total > 15)  { dscnt = (1 - 0.2230); }
+						else if (total > 10)  { dscnt = (1 - 0.1234); }
+						else if (total > 5)   { dscnt = (1 - 0.0109); }
+					}
+				} else if ("EMPRESA MASTER 160".equals(servicePlan)) {
+					if ("RJ".equals($accState)) {
+						code = "R20-1";
+						description = "Desconto Progressivo Empresa Master 160 (RJ)"; 
+						if (total > 200)	  { dscnt = (1 - 0.2540); }
+						else if (total > 100) { dscnt = (1 - 0.2426); }
+						else if (total > 50)  { dscnt = (1 - 0.2354); }
+						else if (total > 25)  { dscnt = (1 - 0.1741); }
+						else if (total > 15)  { dscnt = (1 - 0.1427); }
+						else if (total > 10)  { dscnt = (1 - 0.0856); }
+						else if (total > 5)   { dscnt = (1 - 0.0129); }
+					} else if ("ES".equals($accState)) {
+						code = "R20-3";
+						description = "Desconto Progressivo Empresa Master 160 (ES)"; 
+						if (total > 200)	  { dscnt = (1 - 0.2531); }
+						else if (total > 100) { dscnt = (1 - 0.2439); }
+						else if (total > 50)  { dscnt = (1 - 0.2362); }
+						else if (total > 25)  { dscnt = (1 - 0.1734); }
+						else if (total > 15)  { dscnt = (1 - 0.1442); }
+						else if (total > 10)  { dscnt = (1 - 0.0875); }
+						else if (total > 5)   { dscnt = (1 - 0.0139); }
+					}
+				} else if ("PLANO EMPRESA".equals(servicePlan)) {
+					if ("RJ".equals($accState)) {
+						code = "R20-4";
+						description = "Desconto Progressivo Assinatura Plano Empresa (RJ)"; 
+						if (total > 300)	  { dscnt = (1 - 0.3632); }
+						else if (total > 150) { dscnt = (1 - 0.3045); }
+						else if (total > 50)  { dscnt = (1 - 0.2431); }
+						else if (total > 25)  { dscnt = (1 - 0.1816); }
+						else if (total > 5)   { dscnt = (1 - 0.0922); }
+					} else if ("ES".equals($accState)) {
+						code = "R20-5";
+						description = "Desconto Progressivo Assinatura Plano Empresa (ES)"; 
+						if (total > 300)	  { dscnt = (1 - 0.3634); }
+						else if (total > 150) { dscnt = (1 - 0.3034); }
+						else if (total > 50)  { dscnt = (1 - 0.2433); }
+						else if (total > 25)  { dscnt = (1 - 0.1832); }
+						else if (total > 5)   { dscnt = (1 - 0.0931); }
+					}
+				} else if ("FREE COMPANY 30".equals(servicePlan)) {
+					code = "R20-6";
+					description = "Desconto Progressivo Assinatura Free Company 30"; 
+					if (total > 200)	  { dscnt = (1 - 0.4118); }
+					else if (total > 100) { dscnt = (1 - 0.2941); }
+					else if (total > 50)  { dscnt = (1 - 0.2353); }
+					else if (total > 20)  { dscnt = (1 - 0.1765); }
+					else if (total > 9)   { dscnt = (1 - 0.1765); }
+					else if (total > 5)   { dscnt = (1 - 0.0441); }
+					else if (total > 2)   { dscnt = (1 - 0.0294); }
+				} else if ("FREE COMPANY 80".equals(servicePlan)) {
+					code = "R20-8";
+					description = "Desconto Progressivo Assinatura Free Company 80"; 
+					if (total > 200)	  { dscnt = (1 - 0.6313); }
+					else if (total > 100) { dscnt = (1 - 0.5668); }
+					else if (total > 50)  { dscnt = (1 - 0.5391); }
+					else if (total > 9)   { dscnt = (1 - 0.4930); }
+					else if (total > 5)   { dscnt = (1 - 0.3000); }
+					else if (total > 2)   { dscnt = (1 - 0.2811); }
+				}
+				if (code != null) {
+					for (HierarchySubscriptionInfo subInfo : subscriptions) {
+						double calculatedAmount = subInfo.getCalculatedAmount();
+						if (Math.abs((dscnt * calculatedAmount) - subInfo.getTotalAmount()) >= 0.015) {
+							HierarchyInfo accountInfo = (HierarchyInfo) subscriptionMap.get(subInfo.getId());
+							results.add(
+								buildR20HierarchyConsequence(
+									dimensionCache, consequenceBuilder, accountInfo, hierarchyId,
+									subInfo, code, description, total, dscnt, (dscnt * calculatedAmount)));
+						}
+					}
+				}
+			}
+
+			// Subscription processing for data services
+			Collection<HierarchySubscriptionInfo> allDataServices = new ArrayList<HierarchySubscriptionInfo>();
+			Map<String, HierarchyInfo> dataServicesMap = new HashMap<String, HierarchyInfo>();
+			for (HierarchyInfo hierarchyInfo : hierarchyData) {
+				for (HierarchySubscriptionInfo dataService : hierarchyInfo.getDataServices()) {
+					if (!subscriptionStatusServices.isSubscriptionBlocked("R20_BlockedSubscription", dataService.getId())){
+						dataServicesMap.put(dataService.getId(), hierarchyInfo);
+						allDataServices.add(dataService);
+					}
+				}
+			}
+			if (!allDataServices.isEmpty()) {
+				int total = allDataServices.size();
+				double dscnt = 1 - 0.0;
+				String code = "R20-10";
+				String description = "Desconto Progressivo Assinatura de Dados";
+				if (total > 100)	  { dscnt = (1 - 0.30); }
+				else if (total > 50)  { dscnt = (1 - 0.20); }
+				else if (total > 25)  { dscnt = (1 - 0.10); }
+				else if (total > 10)  { dscnt = (1 - 0.05); }
+				for (HierarchySubscriptionInfo dataService : allDataServices) {
+					double calculatedAmount = dataService.getCalculatedAmount();
+					if (Math.abs((dscnt * calculatedAmount) - dataService.getTotalAmount()) >= 0.015) {
+						HierarchyInfo accountInfo = (HierarchyInfo) dataServicesMap.get(dataService.getId());
+						results.add(
+							buildR20HierarchyConsequence(
+								dimensionCache, consequenceBuilder, accountInfo, hierarchyId, dataService, 
+								code, description, total, dscnt, (dscnt * calculatedAmount)));	
+					}
+				}
+			}
+
+			// Usage processing (Free Company)
+			Map<String, TotalAccumulator> totalDurations = new HashMap<String, TotalAccumulator>();
+			for (HierarchyInfo hierarchyInfo : hierarchyData) {
+				for (Entry<String, Collection<HierarchyUsageInfo>> usageEntry : hierarchyInfo.getFreeCompanyUsages().entrySet()) {
+					String serviceName = usageEntry.getKey();
+					TotalAccumulator totalDuration = totalDurations.get(serviceName);
+					if (totalDuration == null) {
+						totalDuration = new TotalAccumulator();
+						totalDurations.put(serviceName, totalDuration);
+					}
+					for (HierarchyUsageInfo usage : usageEntry.getValue()) {
+						 totalDuration.increment(usage.getDuration());
+					}
+				}
+			}
+			for (Entry<String, TotalAccumulator> serviceDuration : totalDurations.entrySet()) {
+				String serviceName = serviceDuration.getKey();
+				double totalDuration = serviceDuration.getValue().getTotal();
+				double dscnt = 1 - 0.0;
+				String code = null;
+				String description = null;
+				if ("FREECOMPANY30".equals(serviceName)) {
+					code = "R20-7";
+					description = "Desconto Progressivo Uso Free Company 30"; 
+					if (totalDuration > 5000)	   { dscnt = (1 - 0.32); }
+					else if (totalDuration > 1000) { dscnt = (1 - 0.25); }  
+					else if (totalDuration > 500)  { dscnt = (1 - 0.19); }   
+					else if (totalDuration > 200)  { dscnt = (1 - 0.16); }  
+				} else if ("FREECOMPANY80".equals(serviceName)) {
+					code = "R20-9";
+					description = "Desconto Progressivo Uso Free Company 80"; 
+					if (totalDuration > 1000)	   { dscnt = (1 - 0.22); }
+					else if (totalDuration > 500)  { dscnt = (1 - 0.19); }   
+					else if (totalDuration > 200)  { dscnt = (1 - 0.16); }  
+				}
+				if (code != null) {
+					for (HierarchyInfo hierarchyInfo : hierarchyData) {
+						for (HierarchyUsageInfo usage : hierarchyInfo.getFreeCompanyUsages().get(serviceName)) {
+							double calculatedAmount = usage.getCalculatedAmount();
+							if (Math.abs((dscnt * calculatedAmount) - usage.getTotalAmount()) >= 0.015) {
+								results.add(
+									buildR20HierarchyUsageConsequence(
+										dimensionCache, consequenceBuilder, hierarchyInfo, hierarchyId,
+										usage, code, description, serviceName,
+										"Total de minutos utilizados", totalDuration, dscnt,
+										(dscnt * calculatedAmount)));
+							}
+						}
+					}
+				}
+			}
+
+			// Usage processing (Plano Empresa)
+			Map<String, TotalAccumulator> totalPrices = new HashMap<String, TotalAccumulator>();
+			for (HierarchyInfo hierarchyInfo : hierarchyData) {
+				for (Entry<String, Collection<HierarchyUsageInfo>> usageEntry : hierarchyInfo.getPlanoEmpresaUsages().entrySet()) {
+					String serviceName = usageEntry.getKey();
+					TotalAccumulator totalPrice = totalPrices.get(serviceName);
+					if (totalPrice == null) {
+						totalPrice = new TotalAccumulator();
+						totalPrices.put(serviceName, totalPrice);
+					}
+					for (HierarchyUsageInfo usage : usageEntry.getValue()) {
+						 totalPrice.increment(usage.getTotalAmount());
+					}
+				}
+			}
+			for (Entry<String, TotalAccumulator> servicePrice : totalPrices.entrySet()) {
+				String serviceName = servicePrice.getKey();
+				double totalPrice = servicePrice.getValue().getTotal();
+				double dscnt = 1 - 0.0;
+				String code = null;
+				String description = null;
+				if ("PLANO EMPRESA".equals(serviceName)) {
+					if ("RJ".equals($accState)) {
+						code = "R20-11";
+						description = "Desconto Progressivo Uso Plano Empresa (RJ)"; 
+						if (totalPrice <= 750.00)		  { dscnt = (1 - 0.005); }
+						else if (totalPrice <=  1500.00)  { dscnt = (1 - 0.010); }
+						else if (totalPrice <   2145.00)  { dscnt = (1 - 0.015); }
+						else if (totalPrice <   4900.00)  { dscnt = (1 - 0.020); }
+						else if (totalPrice <   7770.00)  { dscnt = (1 - 0.030); }
+						else if (totalPrice <   9525.00)  { dscnt = (1 - 0.040); }
+						else if (totalPrice <  12615.00)  { dscnt = (1 - 0.050); }
+						else if (totalPrice <  15890.00)  { dscnt = (1 - 0.060); }
+						else if (totalPrice <  19675.00)  { dscnt = (1 - 0.070); }
+						else if (totalPrice <  24500.00)  { dscnt = (1 - 0.075); }
+						else if (totalPrice <  31150.00)  { dscnt = (1 - 0.085); }
+						else if (totalPrice <  38315.00)  { dscnt = (1 - 0.095); }
+						else if (totalPrice <  52645.00)  { dscnt = (1 - 0.100); }
+						else if (totalPrice <  67513.00)  { dscnt = (1 - 0.105); }
+						else if (totalPrice <  76300.00)  { dscnt = (1 - 0.120); }
+						else if (totalPrice <  89635.00)  { dscnt = (1 - 0.125); }
+						else if (totalPrice < 122535.00)  { dscnt = (1 - 0.130); }
+						else if (totalPrice < 146480.00)  { dscnt = (1 - 0.140); }
+						else if (totalPrice < 171435.00)  { dscnt = (1 - 0.145); }
+						else if (totalPrice < 197400.00)  { dscnt = (1 - 0.150); }
+						else if (totalPrice < 224370.00)  { dscnt = (1 - 0.155); }
+						else if (totalPrice < 275285.00)  { dscnt = (1 - 0.160); }
+						else if (totalPrice < 304775.00)  { dscnt = (1 - 0.165); }
+						else if (totalPrice < 335270.00)  { dscnt = (1 - 0.170); }
+						else if (totalPrice < 366770.00)  { dscnt = (1 - 0.175); }
+						else if (totalPrice < 197400.00)  { dscnt = (1 - 0.180); }
+						else if (totalPrice < 401000.00)  { dscnt = (1 - 0.185); }
+						else if (totalPrice >= 401000.00) { dscnt = (1 - 0.190); }
+					} else if ("ES".equals($accState)) {
+						code = "R20-12";
+						description = "Desconto Progressivo Uso Plano Empresa (ES)"; 
+						if (totalPrice < 605.00)		  { dscnt = (1 - 0.005); }
+						else if (totalPrice <   1300.00)  { dscnt = (1 - 0.010); }
+						else if (totalPrice <   1815.00)  { dscnt = (1 - 0.015); }
+						else if (totalPrice <   4150.00)  { dscnt = (1 - 0.020); }
+						else if (totalPrice <   6570.00)  { dscnt = (1 - 0.030); }
+						else if (totalPrice <   8055.00)  { dscnt = (1 - 0.040); }
+						else if (totalPrice <  10670.00)  { dscnt = (1 - 0.050); }
+						else if (totalPrice <  13440.00)  { dscnt = (1 - 0.060); }
+						else if (totalPrice <  16640.00)  { dscnt = (1 - 0.070); }
+						else if (totalPrice <  20720.00)  { dscnt = (1 - 0.075); }
+						else if (totalPrice <  26345.00)  { dscnt = (1 - 0.085); }
+						else if (totalPrice <  32410.00)  { dscnt = (1 - 0.095); }
+						else if (totalPrice <  44530.00)  { dscnt = (1 - 0.100); }
+						else if (totalPrice <  57105.00)  { dscnt = (1 - 0.105); }
+						else if (totalPrice <  64540.00)  { dscnt = (1 - 0.120); }
+						else if (totalPrice <  75815.00)  { dscnt = (1 - 0.125); }
+						else if (totalPrice < 103640.00)  { dscnt = (1 - 0.130); }
+						else if (totalPrice < 123900.00)  { dscnt = (1 - 0.140); }
+						else if (totalPrice < 145005.00)  { dscnt = (1 - 0.145); }
+						else if (totalPrice < 166965.00)  { dscnt = (1 - 0.150); }
+						else if (totalPrice < 189780.00)  { dscnt = (1 - 0.155); }
+						else if (totalPrice < 232845.00)  { dscnt = (1 - 0.160); }
+						else if (totalPrice < 257785.00)  { dscnt = (1 - 0.165); }
+						else if (totalPrice < 283580.00)  { dscnt = (1 - 0.170); }
+						else if (totalPrice < 310220.00)  { dscnt = (1 - 0.175); }
+						else if (totalPrice < 401000.00)  { dscnt = (1 - 0.180); }
+						else if (totalPrice >= 401000.00) { dscnt = (1 - 0.190); }
+					}
+				}
+				if (code != null) {
+					for (HierarchyInfo hierarchyInfo : hierarchyData) {
+						for (HierarchyUsageInfo usage : hierarchyInfo.getPlanoEmpresaUsages().get(serviceName)) {
+							double calculatedAmount = usage.getCalculatedAmount();
+							if (Math.abs((dscnt * calculatedAmount) - usage.getTotalAmount()) >= 0.015) {
+								results.add(
+									buildR20HierarchyUsageConsequence(
+										dimensionCache, consequenceBuilder, hierarchyInfo, hierarchyId,
+										usage, code, description, serviceName,
+										"Total do valor das chamadas", totalPrice, dscnt,
+										(dscnt * calculatedAmount)));
+							}
+						}
+					}
+				}
+			}
+			HierarchyHelper.cleanUp(hierarchyId);
+		}
+end

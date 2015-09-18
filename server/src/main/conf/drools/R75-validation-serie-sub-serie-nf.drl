@@ -1,0 +1,154 @@
+#created on: 17/12/2007
+#author anardo
+
+package br.com.auster.rules.vivo.R75;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Receipt;
+import br.com.auster.common.lang.NumberUtils;
+import br.com.auster.billcheckout.param.CarrierVO;
+import br.com.auster.billcheckout.param.CarrierCache;
+
+import br.com.auster.common.text.DateFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.billcheckout.param.CarrierCache carrierCache;
+global java.util.List results;
+
+//função que verifica a existência de números no campo MMAAAA
+function boolean verifyNumber(String value) {	
+	boolean token=false; 
+	//token=false: valor nulo ou zero em .toNumber,e quando não numero, dando Exception que retorna token=false. True qdo OK.
+	try{						
+		//retorna 0 se for null ou vazia(""), e, a String em números, caso converta
+		//Em ParseUtils.getString, usado em ReceiptCH.java, se _value==null, return ""; importante para teste de "" feito ak
+		token = (NumberUtils.toNumber(value)==0 ? false : true); 			
+		
+		//IF que valida mesmo conseguindo converter em números, mas com caracteres . e vazio no final do campo,que seria erro
+		//(""+NumberUtils.toNumber(value)) convertendo em String para usar length()
+		//tamanho 8 pois no retorno da função é o value+(.0), equivalente à quando convertido,tendo 6 digitos numeros esperados + .0
+		if ( (""+NumberUtils.toNumber(value)).length()!=8 ){ 
+			String str = "" + NumberUtils.toNumber(value);						
+			token=false;
+		}		
+	}
+	catch(NumberFormatException e){
+		token=false;		
+	}
+	finally{
+		return token;
+	}
+}
+
+function TelcoConsequence buildR75Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 				 String carrier, String ruleNbr, String desc, String monthYearBill, String monthYearNF,
+		 				 String serieSirs, String subSerieSirs, String serieDB, String subSerieDB, String carrierName,
+		 				 String carrierState, String carrierCode, String cycleCode) {
+		
+		//setando parâmetros padrões para a consequência
+		consequenceBuilder.setRule(ruleNbr, "Série e sub-série das NFs"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(carrier));
+		
+		//definindo os atributos que serão gerados na crítica
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription(desc);
+		//atributos para ambas sub-regras
+		c.addAttribute("Ciclo", cycleCode);
+		c.addAttribute("Nome Operadora", carrierName);
+		c.addAttribute("Código Operadora", carrierCode);		
+		c.addAttribute("Sigla Estado", carrierState);				
+		//atributos para R75-1
+		c.addAttribute("Mês Ano Fatura", DateFormat.format(monthYearBill, "yyyyMM", "MM/yyyy"));	
+		c.addAttribute("Mês Ano Nota Fiscal", DateFormat.format(monthYearNF, "yyyyMM", "MM/yyyy"));
+		//atributos para R75-2
+		c.addAttribute("Serie Fatura", serieSirs);
+		c.addAttribute("Serie Referência", serieDB);
+		c.addAttribute("Sub Serie Fatura", subSerieSirs);
+		c.addAttribute("Sub Serie Referência", subSerieDB);		
+  		
+  		return c;
+}
+
+rule "R75-1 NF sem mês/ano"
+salience 0
+	
+	when
+		Invoice($cycleEndDate : originalCycleEndDate,
+				$cycleCode	  : cycleCode)
+		
+		Receipt($invoiceIssueDate : invoiceIssueDate,
+				$carrierName	  : carrierName,
+				$carrierState	  : carrierState,
+				$carrierCode	  :	carrierCode)
+		
+		Account ($accountCarrierCode : carrierCode)						
+		
+		eval( 
+			 !verifyNumber($cycleEndDate.substring(0,6)) ||     //verifica se campo Data Fatura só tem numeros
+			 !verifyNumber($invoiceIssueDate.substring(0,6)) || //verifica se campo Data Nota Fiscal só tem numeros
+			 !$cycleEndDate.substring(0,6).equals($invoiceIssueDate.substring(0,6)) //MMAAAA cycleEndDate==MMAAAA invoiceIssueDate
+			)					
+	then		
+		results.add(buildR75Consequence(dimensionCache,consequenceBuilder,$accountCarrierCode,"R75-1", "Data da Nota Fiscal inválida",
+        								 $cycleEndDate.substring(0,6), $invoiceIssueDate.substring(0,6), "","","","",
+        								 $carrierName, $carrierState, $carrierCode, $cycleCode));						
+end
+
+rule "R75-INIT"
+salience 90
+	when
+		Account($accountCarrierCode : carrierCode,
+				$cycleCode      	: invoice.cycleCode)
+	
+		Receipt($carrierCode 	: carrierCode,
+				$carrierState	: carrierState,
+				$carrierName	: carrierName )
+	then 
+		CarrierVO carrierVO = carrierCache.getSerieSub($carrierCode,$carrierState); //consultando DB e populando VO
+		if (carrierVO != null) { insert (carrierVO); } //disponibiliza dados VO na memória
+		else { 
+			results.add(buildR75Consequence(dimensionCache,consequenceBuilder,$accountCarrierCode,"R75-INIT", "Código/Estado da operadora inexistente na tabela",
+        								 "", "", "", "", "", "", $carrierName, $carrierState, $carrierCode, $cycleCode.toString()));			 
+		}
+end
+
+rule "R75-2 Operadora - Serie e SubSerie"
+salience 0
+	
+	when
+		Account($accountCarrierCode 	: carrierCode,  //uso padrão no carrierCode da consequencia
+				$cycleCode      		: invoice.cycleCode) 
+				
+		Receipt($receiptCarrierCode 	: carrierCode,
+				$receiptCarrierName		: carrierName,
+				$receiptCarrierState 	: carrierState,
+				$receiptCarrierSerie 	: receiptClass,
+				$receiptCarrierSubSerie	: receiptSubclass)
+						 
+		CarrierVO ($dbCarrierCode 	  : carrierCode  -> ($dbCarrierCode.equals($receiptCarrierCode)),
+				   $dbCarrierState    : carrierState -> ($dbCarrierState.equals($receiptCarrierState)),
+				   $dbCarrierSerie 	  : carrierSerie,
+				   $dbCarrierSubSerie : carrierSubSerie 
+		)			
+		eval( !$dbCarrierSerie.equals($receiptCarrierSerie) || !$dbCarrierSubSerie.equals($receiptCarrierSubSerie))
+		
+	then		
+		results.add(buildR75Consequence(dimensionCache,consequenceBuilder,$accountCarrierCode,"R75-2", "Série/SubSerie inválida",
+        								 "", "", $receiptCarrierSerie, $receiptCarrierSubSerie, $dbCarrierSerie, 
+        								 $dbCarrierSubSerie, $receiptCarrierName, $receiptCarrierState, $receiptCarrierCode, $cycleCode.toString()) );							
+end

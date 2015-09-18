@@ -1,0 +1,33 @@
+#package br.com.auster.rules.vivo;
+
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.common.rules.GlobalForLog;
+
+global java.util.List results;
+global java.util.Map resultsMap;
+
+rule "CreateConsequence-Unqualified" 
+	salience 30
+	when	
+		$u : UsageDetail( $class : callClass  );
+	then
+		if (! resultsMap.containsKey("COUNTERS") ) {
+			Map counters = new HashMap();
+			resultsMap.put("COUNTERS", counters);		
+		}
+		
+		Map counters = (Map) resultsMap.get("COUNTERS");
+		
+		if (!counters.containsKey($class)) {
+			counters.put($class, new AtomicLong(0) );
+		}
+		AtomicLong counter = (AtomicLong) counters.get( $class );		
+		counter.incrementAndGet(); 
+		counters.put($class, counter);					
+end 

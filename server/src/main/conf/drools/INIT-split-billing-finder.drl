@@ -1,0 +1,27 @@
+import br.com.auster.common.lang.NamedHashMap;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.pricing.ServicePrice;
+
+/*	 This rule identifies accounts that contains at least one split billing service
+ *   activated in any subscription.
+ */
+rule "Split Billing Finder" 
+    salience 99
+    no-loop
+    when 
+    	not NamedHashMap(name == "SplitBillingAccount")
+    
+    	ServiceDetail(elementType  == "ACTIVATION_DETAIL" || == "ADDITIONAL_SERVICES_DETAIL",
+    							$price : servicePrice -> ($price != null))
+    then    
+    	String airRateMethod = $price.getCustom2();
+    	if ((airRateMethod != null) && (airRateMethod.equals("LP") || 
+    									airRateMethod.equals("LF") ||
+    									airRateMethod.equals("FP") ||
+    									airRateMethod.equals("FF"))) {
+    									
+    		NamedHashMap map = new NamedHashMap ("SplitBillingAccount");
+    		insert(map);
+    	}
+end

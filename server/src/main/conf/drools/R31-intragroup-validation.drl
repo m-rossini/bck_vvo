@@ -1,0 +1,162 @@
+package br.com.auster.rules.vivo.R31;
+
+import java.util.List;
+import java.util.Iterator;
+import java.util.ArrayList;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.om.invoice.VoiceUsageDetail;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.om.pricing.ServicePrice;
+import br.com.auster.vivo.billcheckout.caches.vo.IntraGroupAccountVO;
+
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+
+import br.com.auster.common.rules.GlobalForLog;
+import br.com.auster.common.lang.NamedHashMap;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+
+import br.com.auster.common.text.DurationFormat;
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results; 
+global br.com.auster.vivo.billcheckout.caches.R30R31ServiceListCodeCache serviceListCodeCache;
+global br.com.auster.vivo.billcheckout.caches.R31IntraGroupTypeCache intraGroupTypeCache;
+global br.com.auster.vivo.billcheckout.caches.R31IntraGroupAccountCache intraGroupAccountCache;
+global br.com.auster.vivo.billcheckout.caches.R31IntraGroupHirchCache intraGroupHirchCache;
+#
+# Regra 31 – Intra group Validation
+#
+
+function void buildR31Consequence(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		String code, String description, VoiceUsageDetail usage, NamedHashMap dupIntraMap) {
+		
+		String key = code + "_" + usage.getChannelId() + "_" + usage.getCalledNumber();
+		if (!dupIntraMap.containsKey(key)) {
+			dupIntraMap.put(key, null);
+			consequenceBuilder.setRule(code, "Tarifação de Intra-Grupo"); 
+			consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+			consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+			consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+			consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+			consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(usage.getInvoice().getAccount().getCarrierCode()));
+		
+			TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+			c.setDescription(description);
+			c.addAttribute("Ciclo", usage.getInvoice().getCycleCode());
+			c.addAttribute("NomeDoServico", usage.getSvcPlan());											
+			c.addAttribute("Terminal", usage.getChannelId());
+			c.addAttribute("Subscrição", usage.getSection().getSubscriptionid());
+			c.addAttribute("Classe da Chamada", usage.getCallClass());
+			c.addAttribute("Operadora da Chamada", usage.getCarrierCode());
+			c.addAttribute("Sub Classe da Chamada", usage.getCallSubclass());
+			c.addAttribute("Tipo de Tarifa", usage.getTariffClass());
+	        c.addDateAttribute("Data Chamada", usage.getDatetime(), "dd/MM/yy");
+	        c.addAttribute("Hora Chamada", DurationFormat.formatFromDate(usage.getDatetime()));
+	        c.addAttribute("Duração Real Chamada", usage.getRealDuration());
+			c.addAttribute("Número Origem", usage.getChannelId());
+			c.addAttribute("Número Destino", ValueFormat.formatPhone(usage.getCalledNumber()));
+			c.addAttribute("Valor Chamada", ValueFormat.formatValue(usage.getTotalAmount()));
+			results.add(c);  
+		}
+}
+
+
+/*  Para cada subscrição, verifica se a mesma possui servico de IntraGroup.
+ *	Se sim, busca sua classificação e insere uma HashMap na WorkingMemory  */
+
+rule "R31-INIT-01" salience 90
+    when
+    	$list : ArrayList ( size > 0 )
+	              from collect(ServiceDetail(elementType  == "ACTIVATION_DETAIL" || == "ADDITIONAL_SERVICES_DETAIL",
+	              							 servicePrice != null))
+    then
+    	NamedHashMap map = new NamedHashMap("IntraGroupList");
+    	
+    	Iterator it = $list.iterator();
+		while (it.hasNext()) {
+			ServiceDetail sd = (ServiceDetail) it.next();
+
+			ServicePrice price = sd.getServicePrice();
+			if (price.getService() != null) {
+				// Verifica se o serviço é IntraGroup
+				String listCode = serviceListCodeCache.get(price.getService().getExternalId()).getListCd();
+				if (("3").equals(listCode) || ("5").equals(listCode) || ("6").equals(listCode) || ("7").equals(listCode)) {
+					// Verifica qual o tipo de IntraGroup associado a este serviço
+					String intraGroupType = intraGroupTypeCache.get(price.getService().getExternalId()).getAttrGroupName();
+					if (intraGroupType != null) {
+						if (intraGroupType.contains("FULL_CNPJ_CRTRA") || intraGroupType.contains("ROOT_CNPJ_CRTRA") 
+							|| intraGroupType.contains("HIRCH_ID_CRTRA")) {
+	
+							if (map.get(sd.getSection().getAccessNbr()) == null) {
+								map.put(sd.getSection().getAccessNbr(), intraGroupType);
+							}
+						}
+					}
+				}
+			}
+		}
+		
+		if (map.size() > 0 ) {
+			insert(map);
+			NamedHashMap dupIntraMap = new NamedHashMap("DupplicatedIntraGroup");
+			insert(dupIntraMap);
+		}
+end
+
+
+rule "R31-01" salience 80
+    when
+  		$map : NamedHashMap ( name == "IntraGroupList")
+  		$dupIntraMap : NamedHashMap ( name == "DupplicatedIntraGroup")
+		
+		$usage : VoiceUsageDetail($channelId : channelId,
+								  $totalAmount : totalAmount > 0,
+								  $callSubclass : callSubclass,
+	              				  callClass == ChecklistClasses.CALL_CLASS_VC1H ||
+	              				  			== ChecklistClasses.CALL_CLASS_VC1C ||
+	              				  			== ChecklistClasses.CALL_CLASS_FRANQUIA)
+    then
+		if ($map.get($channelId) != null) {
+			if (((String) $map.get($channelId)).contains("FULL_CNPJ_CRTRA")) {
+				IntraGroupAccountVO callingAccount = intraGroupAccountCache.get($usage.getChannelId());
+				IntraGroupAccountVO calledAccount = intraGroupAccountCache.get($usage.getCalledNumber());
+				if (callingAccount.isFullCnpjEquals(calledAccount)) {
+					buildR31Consequence(results, dimensionCache, consequenceBuilder, "R31-01", "Chamada Intra-Grupo CNPJ Completo qualificada pela regra não zerada", $usage, $dupIntraMap);	
+				}
+			}
+			else if (((String) $map.get($channelId)).contains("ROOT_CNPJ_CRTRA")) {
+				IntraGroupAccountVO callingAccount = intraGroupAccountCache.get($usage.getChannelId());
+				IntraGroupAccountVO calledAccount = intraGroupAccountCache.get($usage.getCalledNumber());
+				
+				if (callingAccount.isRootCnpjEquals(calledAccount)) {
+					buildR31Consequence(results, dimensionCache, consequenceBuilder, "R31-02", "Chamada Intra-Grupo CNPJ Raiz qualificada pela regra não zerada", $usage, $dupIntraMap);
+				}
+			}
+			else if (((String) $map.get($channelId)).contains("HIRCH_ID_CRTRA")) {
+				String key = $usage.getInvoice().getAccount().getAccountNumber() 
+							 + "_" + $usage.getCalledNumber() 
+							 + "_" + $usage.getInvoice().getOriginalCycleStartDate() 
+							 + "_" + $usage.getInvoice().getOriginalCycleEndDate();
+				
+				String calledNbr = intraGroupHirchCache.get(key);
+				if ($usage.getCalledNumber().equals(calledNbr)) {
+					buildR31Consequence(results, dimensionCache, consequenceBuilder, "R31-03", "Chamada Intra-Grupo Hierarquia qualificada pela regra não zerada", $usage, $dupIntraMap);
+				}
+			}
+		}
+end

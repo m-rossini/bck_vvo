@@ -1,0 +1,7 @@
+				<!--dw:config-->
+					<invoice-loader class-name="br.com.auster.sirs.loader.SirsLoader">
+						<loader-config tag-map-file="src/main/conf/sirs/sirs-tag-map.properties"
+							encrypted="false"/>
+					</invoice-loader>
+					<!--dw:object-list-tag name="invoice-om"/-->
+				<!--/dw:config-->

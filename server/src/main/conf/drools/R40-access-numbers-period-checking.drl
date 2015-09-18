@@ -1,0 +1,226 @@
+package br.com.auster.rules.vivo.R40;
+
+import java.util.List;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.ServiceDetail;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoDimensionsFacade;
+
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.vivo.billcheckout.cache.vo.DataBarnCycleVO;
+import br.com.auster.vivo.billcheckout.cache.vo.DataBarnSubscriptionVO;
+
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.vivo.billcheckout.cache.DataBarnSubscriptionServices dataBarnSubscriptionServices;
+global java.util.List results;
+
+function TelcoConsequence buildR40Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		Account account, String ruleNbr, String desc, String subscriptionId, String accessNbr, String effectiveDate, String expirationDate) {
+    consequenceBuilder.setRule(ruleNbr, "Validação de Terminais Faturados");
+    consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+    consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+    consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+    consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+    consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(account.getCarrierCode()));
+
+    TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+    c.setDescription(desc);	
+    c.addAttribute("TipoCliente", account.getAccountType());
+    c.addAttribute("Subscrição", subscriptionId);
+    c.addAttribute("Terminal", ValueFormat.formatPhone(accessNbr));
+    c.addAttribute("Data Ativação", effectiveDate);
+    c.addAttribute("Data Expiração", expirationDate);
+    return c;
+}
+
+rule "R40-INIT"
+// inicio -> executa query 1 e query 3
+	salience 90
+	when	
+		$account : Account()
+		$invoice : Invoice()
+	then
+		List<DataBarnSubscriptionVO> list1 = dataBarnSubscriptionServices.getAccountSubscriptions(
+				$account.getAccountNumber(), $invoice.getOriginalCycleEndDate(), $invoice.getOriginalCycleStartDate());
+		for (DataBarnSubscriptionVO vo : list1) {
+			insert(vo);
+		}
+		List<DataBarnCycleVO> list2 = dataBarnSubscriptionServices.getAccountCycles($account.getAccountNumber());
+		for (DataBarnCycleVO vo : list2) {
+			insert(vo);
+		}
+end 
+
+rule "R40-1"
+// tem no SIRS e tem no DATA-BARN (query 1)
+// e data ativação > data fim do ciclo
+	salience 0
+	when	
+		$account : Account() 
+		Invoice(
+			$endDate : originalCycleEndDate
+		)
+		$subscription1 : Section(
+			elementType == "SUBSCRIPTION_INFO", 
+			$id : subscriptionid
+		)
+		$subscription2 : DataBarnSubscriptionVO(
+			queryNumber == 1,
+			subscriptionId == $id,
+			$beginDate : effectiveDate != null
+		)
+		eval ( $beginDate.compareTo($endDate) > 0 )
+	then
+		results.add(buildR40Consequence(dimensionCache, consequenceBuilder, $account,
+			"R40-1", "Subscrição no SIRS e no Cadastro com data ativação > data fim ciclo",
+			$subscription1.getSubscriptionid(), $subscription1.getAccessNbr(), $subscription2.getEffectiveDate(), $subscription2.getExpirationDate() ));
+end 
+
+rule "R40-2"
+// tem no SIRS e tem no DATA-BARN (query 1)
+// e data expiração < data inicio do ciclo e contem 325D (ACTIVATION_DETAIL)
+	salience 0
+	when	
+		$account : Account() 
+		Invoice(
+			$beginDate : originalCycleStartDate
+		)
+		$subscription1 : Section(
+			elementType == "SUBSCRIPTION_INFO", 
+			$id : subscriptionid
+		)
+		$subSection : Section( elementType == "ACTIVATION_TOTAL" ) from $subscription1.subSections
+		exists ( ServiceDetail( elementType == "ACTIVATION_DETAIL" ) from $subSection.details )
+		$subscription2 : DataBarnSubscriptionVO(
+			queryNumber == 1,
+			subscriptionId == $id,
+			$endDate : expirationDate != null
+		)
+		eval ( $endDate.compareTo($beginDate) < 0 )
+	then
+		results.add(buildR40Consequence(dimensionCache, consequenceBuilder, $account,
+			"R40-2", "Subscrição no SIRS e no Cadastro com data expiração < data inicio ciclo",
+			$subscription1.getSubscriptionid(), $subscription1.getAccessNbr(), $subscription2.getEffectiveDate(), $subscription2.getExpirationDate() ));
+end 
+
+rule "R40-3"
+// tem no SIRS e nao tem no DATA-BARN (query 1)
+	salience 0
+	when	
+		$account : Account() 
+		$subscription : Section(
+			elementType == "SUBSCRIPTION_INFO", 
+			$id : subscriptionid
+		)
+		not ( exists DataBarnSubscriptionVO( queryNumber == 1, subscriptionId == $id ) )
+		exists ( Section(elementType == "ACTIVATION_TOTAL", subscriptionid == $id ))
+	then
+		results.add(buildR40Consequence(dimensionCache, consequenceBuilder, $account,
+			"R40-3", "Subscrição apenas no SIRS", $subscription.getSubscriptionid(), $subscription.getAccessNbr(), null, null ));
+end 
+
+
+rule "R40-4"
+// nao tem no SIRS e tem no DATA-BARN (query 1) -> executa query 2
+	salience 80
+	when	
+		$invoice : Invoice()
+		DataBarnSubscriptionVO(
+			queryNumber == 1,
+			$id : subscriptionId,
+			effectiveDate != expirationDate
+		)
+		not ( exists Section( 
+			elementType == "SUBSCRIPTION_INFO", 
+			subscriptionid == $id
+		) )
+	then
+		List<DataBarnSubscriptionVO> list = dataBarnSubscriptionServices.getSubscriptionsById(
+				$id, $invoice.getOriginalCycleEndDate(), $invoice.getOriginalCycleStartDate());
+		for (DataBarnSubscriptionVO vo : list) {
+			insert(vo);
+		}
+end 
+
+rule "R40-5"
+// se tiver periodos intercalados na query 2
+// ($endDate1 e/ou $endDate2 podem ser null)
+	salience 0
+	when	
+		$account : Account() 
+		$subscription : DataBarnSubscriptionVO(
+			queryNumber == 2,
+			$accNbr : accountNumber,
+			$subscrId : subscriptionId,
+			$beginDate1 : effectiveDate != null,
+			$endDate1 : expirationDate
+		)
+		exists DataBarnSubscriptionVO(
+			queryNumber == 2,
+			accountNumber != $accNbr,
+			subscriptionId == $subscrId,
+			$beginDate2 : effectiveDate != null,
+			$endDate2 : expirationDate,
+			eval( $beginDate2.compareTo($beginDate1) >= 0 &&
+				( $endDate1 == null || $beginDate2.compareTo($endDate1) <= 0 ) )
+		)
+	then
+		results.add(buildR40Consequence(dimensionCache, consequenceBuilder, $account,
+			"R40-5", "Terminal ativado em mais de uma conta",
+			$subscription.getSubscriptionId(), null, $subscription.getEffectiveDate(), $subscription.getExpirationDate() ));
+end 
+
+rule "R40-6"
+// nao tem no SIRS e tem no DATA-BARN (query 1)
+// usa query 2 para verificar se houve troca de conta e
+// usa query 3 para verificar se houve troca de ciclo
+	salience 0
+	when	
+		// nao trocou de ciclo no periodo da conta
+		$invoice : Invoice( $cycleCode : cycleCode )
+		not ( exists DataBarnCycleVO(
+			$date : effectiveDate != null,
+			eval( $date.compareTo($invoice.getOriginalCycleStartDate()) >= 0 && $date.compareTo($invoice.getOriginalCycleEndDate()) <= 0 )
+		) )
+		
+		$subscription : DataBarnSubscriptionVO(
+			queryNumber == 1,
+			$id : subscriptionId,
+			effectiveDate != expirationDate
+		)
+		not ( exists Section( 
+			elementType == "SUBSCRIPTION_INFO", 
+			subscriptionid == $id
+		) )
+		
+		// trocou de conta e subscrição está ativa na conta do SIRS 
+		$account : Account(
+			$accNbr : accountNumber
+		)
+		exists (
+			DataBarnSubscriptionVO(
+				queryNumber == 2,
+				expirationDate == null,
+				accountNumber == $accNbr,
+				subscriptionId == $id
+			)
+		)
+
+	then
+		results.add(buildR40Consequence(dimensionCache, consequenceBuilder, $account,
+			"R40-6", "Subscrição apenas no Cadastro",
+			$subscription.getSubscriptionId(), null, $subscription.getEffectiveDate(), $subscription.getExpirationDate() ));
+end 

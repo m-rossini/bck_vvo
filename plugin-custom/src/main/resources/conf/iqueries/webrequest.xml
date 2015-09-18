@@ -1,0 +1,17 @@
+<view display-name="Requisições de Processamento" datasource="ds1">
+	<columns>
+		<column name="request_id" 				display-name="Nr. da Requisição" 	
+				table="web_request" 			type="long"			
+				visible="true"/>
+		<column name="end_date" 				display-name="Data de Término" 	
+				table="web_request" 			type="datetime"			
+				visible="true"/>
+		<column name="start_date" 				display-name="Data de Criação" 	
+				table="web_request" 			type="datetime"			
+				visible="true"/>
+		<column name="request_status"			display-name="Status da Requisição" 	
+				table="web_request" 			type="string"			
+				visible="true"/>
+	</columns>
+	<relations/>
+</view>

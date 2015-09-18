@@ -1,0 +1,399 @@
+package br.com.auster.rules.vivo.R01;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Map.Entry;
+import java.util.Iterator;
+import java.util.HashMap;
+
+import java.util.concurrent.atomic.AtomicLong;
+import br.com.auster.common.rules.GlobalForLog;
+import br.com.auster.common.lang.NamedHashMap;
+import br.com.auster.common.lang.NamedDouble;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.om.invoice.SectionDetail;
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.VoiceUsageDetail;
+import br.com.auster.om.invoice.DataUsageDetail;
+import br.com.auster.om.invoice.EventUsageDetail;
+import br.com.auster.om.invoice.FreeUnitsDetail;
+import br.com.auster.om.pricing.ServicePrice;
+import br.com.auster.om.pricing.ServiceFreeUnits;
+import br.com.auster.om.pricing.TaxCategory;
+import br.com.auster.om.pricing.TaxRate;
+
+import br.com.auster.om.util.UnitConvertor;
+
+import br.com.auster.vivo.billcheckout.util.FreeUnitsBucket;
+import br.com.auster.vivo.billcheckout.util.ServiceNotFoundSet;
+import br.com.auster.vivo.billcheckout.util.CheckList;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+import br.com.auster.vivo.billcheckout.util.DimensionCache
+import br.com.auster.vivo.billcheckout.util.InvoiceUtils;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.common.text.ValueFormat;
+import br.com.auster.common.text.DurationFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+
+
+function void buildR01Consequence01(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 String ruleNbr, String desc, String carrierCode, UsageDetail usg) {
+    consequenceBuilder.setRule(ruleNbr, "Erro de Tarifação");
+    consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+    consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+    consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+    consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+    consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(carrierCode));
+
+    TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+    c.setDescription(desc);	
+    c.addAttribute("Ciclo", usg.getInvoice().getCycleCode());
+    c.addAttribute("NomeDoServico", usg.getSvcPlan());
+	c.addAttribute("Valor Calculado", ValueFormat.formatValue(usg.getCalculatedValue()));                              	        
+	c.addAttribute("Valor Cobrado", ValueFormat.formatValue(usg.getTotalAmount()));
+	c.addAttribute("Diferença", ValueFormat.formatValue((usg.getCalculatedValue() - usg.getTotalAmount())));
+	c.addAttribute("Classe Chamada",usg.getCallClass());
+	c.addAttribute("Sub Classe Chamada", usg.getCallSubclass());
+	c.addAttribute("Tarifa Chamada", usg.getTariffClass());
+	c.addDateAttribute("Data", usg.getDatetime(), "dd/MM/yy");
+	c.addAttribute("Hora", DurationFormat.formatFromDate(usg.getDatetime()));
+	c.addAttribute("Número Origem", usg.getChannelId());
+	c.addAttribute("Número Destino", ValueFormat.formatPhone(usg.getCalledNumber()));
+	c.addAttribute("Duração Chamada", usg.getUsageDuration());
+	c.addAttribute("Cenário", usg.getSvcId());
+	c.addAttribute("Valor Inicial",  ValueFormat.formatValue(usg.getPrice().getInitCost()));
+	c.addAttribute("Valor Adicional", ValueFormat.formatValue(usg.getPrice().getStepCost()));
+	c.addAttribute("Unidade", usg.getPrice().getInitType());
+	c.addAttribute("Categoria", usg.getPrice().getTaxCategory().getTaxCode() );
+	
+	String subState = usg.getSection().getParentSection().getParentSection().getSubscriptionState();
+	TaxRate taxRate = usg.getPrice().getTaxCategory().getTaxRate(subState,usg.getDatetime());			
+	double usedTaxRate = (taxRate == null)? -1 : taxRate.getTaxRate();
+	c.addAttribute("Imposto", ValueFormat.formatValue(usedTaxRate));	
+	c.addAttribute("Estado Subscrição", subState);
+    results.add(c); 
+}
+
+function void buildR01Consequence02(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 String ruleNbr, String desc, String carrierCode, UsageDetail usg) {
+    consequenceBuilder.setRule(ruleNbr, "Erro de Tarifação");
+    consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+    consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+    consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+    consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+    consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(carrierCode));
+
+    TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+    c.setDescription(desc);	
+    c.addAttribute("Ciclo", usg.getInvoice().getCycleCode());
+    c.addAttribute("NomeDoServico", usg.getSvcPlan());
+	c.addAttribute("Valor Calculado", "");                              	        
+	c.addAttribute("Valor Cobrado", ValueFormat.formatValue(usg.getTotalAmount()));
+	c.addAttribute("Diferença", "");
+	c.addAttribute("Classe Chamada",usg.getCallClass());
+	c.addAttribute("Sub Classe Chamada", usg.getCallSubclass());
+	c.addAttribute("Tarifa Chamada", usg.getTariffClass());
+	c.addDateAttribute("Data", usg.getDatetime(), "dd/MM/yy");
+	c.addAttribute("Hora", DurationFormat.formatFromDate(usg.getDatetime()));
+	c.addAttribute("Número Origem", usg.getChannelId());
+	c.addAttribute("Número Destino", ValueFormat.formatPhone(usg.getCalledNumber()));
+	c.addAttribute("Duração Chamada", usg.getUsageDuration());
+	c.addAttribute("Cenário", usg.getSvcId());
+	c.addAttribute("Valor Inicial",  "");
+	c.addAttribute("Valor Adicional", "");
+	c.addAttribute("Unidade", "");
+	c.addAttribute("Categoria", "");
+	c.addAttribute("Imposto", "");	
+	c.addAttribute("Estado Subscrição", usg.getSection().getParentSection().getParentSection().getSubscriptionState());
+    results.add(c); 
+}
+
+/** 
+ * For each account, create a map of service plans to build the 
+ * checklist related to that plan.
+ *
+ * Map<String svcPlanName, Consequence checklist>
+ */
+rule "R01-SERVICE_INIT"
+	salience 100
+	when
+		not ( NamedHashMap( name == "InexistentPrice" ) )
+	then
+		
+		NamedDouble limit = new NamedDouble("RatingErrorLimit");	 
+		limit.setValue(2);
+		insert(limit);
+		
+		NamedHashMap currentErrors = new NamedHashMap("CurrentRatingErrors");
+		insert(currentErrors);
+		
+		NamedHashMap inexistentPrice = new NamedHashMap("InexistentPrice");
+		insert(inexistentPrice);
+end
+
+//###########################################################################
+// TARIFAÇÃO
+//###########################################################################
+
+/**
+ * RULE #1.2 - Valor de chamadas nacionais (menos recebidas em Roaming)
+ *
+ * Rerates all voice usage details.
+ *
+ * If a problem is found, report it and also, if there is a scenario for 
+ * that voice usage, increment the error count.
+ */
+rule "R01-1"
+	salience 10
+	when	
+		$usage : VoiceUsageDetail (
+			priceNegotiated == false,
+			passThrough == false,
+			callClass != ChecklistClasses.CALL_CLASS_AD1,
+			$carrierCode : carrierCode,
+			rated == true,
+			objectType != "A",
+			$tag : tag ,
+			$etype : elementType -> ( ! ("INTERNATIONAL_CALLS_DETAIL".equals($etype) || "ROAM_MOC_INTERNATIONAL_DETAIL".equals($etype) || "ROAM_MTC_LOCAL_DETAIL".equals($etype) || "ROAM_MTC_LD_DETAIL".equals($etype) || "ROAM_MTC_INTERNATIONAL_DETAIL".equals($etype)) ),
+			$priceInfo : price -> ( ($priceInfo != null) && (!("F".equals($priceInfo.getChargeType()))) ),
+			svcPlan not matches ".*GESTAO.*",
+			$amtDiff : amountDifference -> ($amtDiff >= 0.02)
+	    )
+			
+	    $lim : NamedDouble( name == "RatingErrorLimit" )
+	    
+	    $err : NamedHashMap( name == "CurrentRatingErrors" )
+	then
+		$usage.setRated(ServiceDetail.WRONGLY_RATED);
+
+		String svc = $usage.getSvcPlan();
+		HashMap svcMap = (HashMap) $err.get(svc);
+		if (svcMap == null) {
+			svcMap = new HashMap();
+			$err.put(svc, svcMap);
+		} 			
+		String keyForCounter = $usage.getCallClass() + "." + $usage.getCallSubclass() + "." + $usage.getTariffClass();
+		AtomicLong counter = (AtomicLong) svcMap.get(keyForCounter);
+		if (counter == null) {
+			counter = new AtomicLong(0);
+		}
+
+		svcMap.put(keyForCounter, counter);
+		counter.incrementAndGet(); 
+						
+		if (counter.get() <= $lim.getValue() ) {
+			buildR01Consequence01(results, dimensionCache, consequenceBuilder, "R01-01", 
+			                      "Chamada Nacional Tarifada Incorretamente", $carrierCode, $usage);
+        }
+                		
+end
+
+/**
+ * RULE #1.4  valor de SMS/MMS
+ */
+rule "R01-2"
+	salience 10
+	when
+		$usage : EventUsageDetail (
+			priceNegotiated == false,		
+			passThrough == false,
+			callClass != ChecklistClasses.CALL_CLASS_AD1,
+			$carrierCode : carrierCode,
+			rated == true,
+			objectType != "A",
+			$tag : tag,
+			$priceInfo : price -> ( ($priceInfo != null) && (!("F".equals($priceInfo.getChargeType()))) ),
+			svcPlan not matches ".*GESTAO.*",
+			$amtDiff : amountDifference -> ($amtDiff >= 0.02)
+	    ) 
+
+   	    $lim : NamedDouble( name == "RatingErrorLimit" )
+   	    
+	    $err : NamedHashMap( name == "CurrentRatingErrors" )
+	then
+		$usage.setRated(ServiceDetail.WRONGLY_RATED);
+		
+		String svc = $usage.getSvcPlan();
+		HashMap svcMap = (HashMap) $err.get(svc);
+		if (svcMap == null) {
+			svcMap = new HashMap();
+			$err.put(svc, svcMap);
+		} 			
+		String keyForCounter = $usage.getCallClass() + "." + $usage.getCallSubclass() + "." + $usage.getTariffClass();
+		AtomicLong counter = (AtomicLong) svcMap.get(keyForCounter);
+		if (counter == null) {
+			counter = new AtomicLong(0);
+		}
+
+		svcMap.put(keyForCounter, counter);
+   		counter.incrementAndGet();		
+   				
+		if (counter.get() <= $lim.getValue()) {
+			buildR01Consequence01(results, dimensionCache, consequenceBuilder, "R01-02", "Evento de Mensagem Tarifado Incorretamente", $carrierCode, $usage);
+        }		
+end
+/**
+ * RULE #1.7: valor de chamadas internacionais
+ */
+rule "R01-3"
+	salience 10
+	when
+		$usage : VoiceUsageDetail (
+			priceNegotiated == false,				
+			passThrough == false,
+			callClass != ChecklistClasses.CALL_CLASS_AD1,
+			$carrierCode : carrierCode,
+			rated == true,
+			objectType != "A",
+			$tag : tag ,
+			$etype : elementType -> (  ("INTERNATIONAL_CALLS_DETAIL".equals($etype) || "ROAM_MOC_INTERNATIONAL_DETAIL".equals($etype) || "ROAM_MTC_LOCAL_DETAIL".equals($etype) || "ROAM_MTC_LD_DETAIL".equals($etype) || "ROAM_MTC_INTERNATIONAL_DETAIL".equals($etype)) ),			
+			$priceInfo : price -> ( ($priceInfo != null) && (!("F".equals($priceInfo.getChargeType()))) ),
+			svcPlan not matches ".*GESTAO.*",
+			$amtDiff : amountDifference -> ($amtDiff > 0.01)
+	    ) 
+
+	    $lim : NamedDouble( name == "RatingErrorLimit" )
+	    
+	    $err : NamedHashMap( name == "CurrentRatingErrors" )
+	then
+		$usage.setRated(ServiceDetail.WRONGLY_RATED);
+		
+		String svc = $usage.getSvcPlan();
+		HashMap svcMap = (HashMap) $err.get(svc);
+		if (svcMap == null) {
+			svcMap = new HashMap();
+			$err.put(svc, svcMap);
+		} 			
+		String keyForCounter = $usage.getCallClass() + "." + $usage.getCallSubclass() + "." + $usage.getTariffClass();
+		AtomicLong counter = (AtomicLong) svcMap.get(keyForCounter);
+		if (counter == null) {
+			counter = new AtomicLong(0);
+		}
+
+		svcMap.put(keyForCounter, counter);
+		counter.incrementAndGet(); 
+						
+		if (counter.get() <= $lim.getValue()) {
+			buildR01Consequence01(results, dimensionCache, consequenceBuilder, "R01-03", "Chamada Internacional Tarifada Incorretamente", $carrierCode, $usage);
+        }	               	
+end
+/**
+ * RULE #1.8: valor de servicos de dados
+ */
+rule "R01-04"
+	salience 10
+	when
+		$usage : DataUsageDetail (
+			priceNegotiated == false,				
+			passThrough == false,
+			callClass != ChecklistClasses.CALL_CLASS_AD1,
+			$carrierCode : carrierCode,
+			rated == true,
+			objectType != "A",
+			$tag : tag,
+			$priceInfo : price -> ( ($priceInfo != null) && (!("F".equals($priceInfo.getChargeType()))) ),
+			svcPlan not matches ".*GESTAO.*",
+			$amtDiff : amountDifference -> ($amtDiff > 0.01)
+	    ) 
+
+	    $lim : NamedDouble( name == "RatingErrorLimit" )
+
+	    $err : NamedHashMap( name == "CurrentRatingErrors" )		
+	then
+		$usage.setRated(ServiceDetail.WRONGLY_RATED);
+		
+		String svc = $usage.getSvcPlan();
+		HashMap svcMap = (HashMap) $err.get(svc);
+		if (svcMap == null) {
+			svcMap = new HashMap();
+			$err.put(svc, svcMap);
+		} 			
+		String keyForCounter = $usage.getCallClass() + "." + $usage.getCallSubclass() + "." + $usage.getTariffClass();
+		AtomicLong counter = (AtomicLong) svcMap.get(keyForCounter);
+		if (counter == null) {
+			counter = new AtomicLong(0);
+		}
+
+		svcMap.put(keyForCounter, counter);
+  		counter.incrementAndGet(); 	
+  						
+		if (counter.get() <= $lim.getValue()) {
+			buildR01Consequence01(results, dimensionCache, consequenceBuilder, "R01-04", "Chamada de Dados Tarifada Incorretamente", $carrierCode, $usage);
+        }	
+end     
+
+/**
+ * RULE #00-3: Quantidade de eventos tarifados incorretamente
+ */
+rule "R01 - Wrong Rating Counter Dump"
+	salience 0
+	when
+		Account( $carrierCode : carrierCode )
+	    $lim : NamedDouble( name == "RatingErrorLimit" )		
+	    $err : NamedHashMap( name == "CurrentRatingErrors" )
+	then
+	  Iterator itr;	
+		for (itr=$err.entrySet().iterator();itr.hasNext();) {
+			Map.Entry entry = (Map.Entry) itr.next();
+			String p1 = (String) entry.getKey();
+			Map svcMap = (Map) entry.getValue();
+			Iterator itSVC;
+			for (itSVC=svcMap.entrySet().iterator(); itSVC.hasNext();) {
+				Map.Entry countEntry = (Map.Entry) itSVC.next();
+				String p2 = p1 + "." + (String) countEntry.getKey();
+				AtomicLong counter = (AtomicLong) countEntry.getValue();
+				//Just create consequence for this type, if the number of errors is greater than the limit.				
+				if (counter.get() > $lim.getValue()) {
+					consequenceBuilder.setRule("A00-1","Contador de Tarifação Incorreta"); 
+					consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+					consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));
+					consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));
+					consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));
+					consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($carrierCode));
+					TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+					c.setDescription("Serviço com Excesso de Erros de Tarifação.");	
+					c.addAttribute("Nome do Plano", p2 ); 
+					c.addLongAttribute("Ocorrências",counter.get(), "0"); 
+					results.add(c);  
+				}
+			}
+		}
+end		    
+
+
+rule "R01-5"
+	salience 0
+	when
+		$usage : UsageDetail (		 
+			priceNegotiated == false,
+			passThrough == false,
+			callClass != ChecklistClasses.CALL_CLASS_AD1,
+			$carrierCode : carrierCode,
+			objectType != "A",
+			$priceInfo : price -> ( $priceInfo == null)
+	    )
+	    $inex : NamedHashMap( name == "InexistentPrice" )
+	then
+		if (!$inex.containsKey($usage.getSvcId())) {
+			$inex.put($usage.getSvcId(), null);
+			buildR01Consequence02(results, dimensionCache, consequenceBuilder, "R01-05", "Servico/Tarifa não cadastrado no Billcheckout", $carrierCode, $usage);
+		}
+end		    

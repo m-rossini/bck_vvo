@@ -1,0 +1,49 @@
+package br.com.auster.rules.vivo.R62;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.vivo.billcheckout.util.DimensionCache ;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.om.invoice.InstallmentDetail;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.om.invoice.Invoice;
+
+import br.com.auster.common.text.ValueFormat;
+
+global java.util.List results;
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+ 
+
+rule "R62"
+salience 90
+when
+	$inst : InstallmentDetail (
+		elementType == "EQUIPMENT_INSTALLMENT_DETAIL",
+		$currentParcel : currentParcel,
+		$totalParcels : totalParcels )
+		
+	eval ($currentParcel > $totalParcels)
+then
+	consequenceBuilder.setRule("R62-01","Parcelas do Aparelho"); 
+	consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+	consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+	consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+	consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+	consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($inst.getInvoice().getAccount().getCarrierCode()));
+	
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription("Parcelamento Incorreto");	
+	c.addAttribute("Valor da Parcela", ValueFormat.formatValue($inst.getTotalAmount()));	  
+	c.addLongAttribute("Parcela Atual", $currentParcel, "0");
+	c.addLongAttribute("Total de Parcelas", $totalParcels, "0");        
+	c.addAttribute("Parcelas", $currentParcel+"/"+$totalParcels);     
+	results.add(c); 
+end

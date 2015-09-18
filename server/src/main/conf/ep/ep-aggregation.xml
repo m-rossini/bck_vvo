@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<aggregation-config id="aggregation-config">
+
+   <!-- 
+         INVOICE Fact definition 
+    -->
+	<fact name="invoiceFact" class-name="br.com.auster.om.dynamic.InvoiceFact">
+	
+	  <!-- SOURCE ANCHOR DATA -->
+	  <source name="invoice">
+	     invoices = new ArrayList()
+	     invoice_om.each() { acct ->
+               invoices.addAll(acct.invoices.values())
+	     }
+	     return invoices
+	  </source>
+	  
+	  <!-- FACT Attributes -->
+	  <attribute name="totalAmount" type="double">
+	     invoice.totalAmountDue
+	  </attribute>
+	  <attribute name="currentPeriodAmount" type="double">
+	     invoice.currentPeriodAmount
+	  </attribute>	
+	  <attribute name="interestsAmount" type="double">
+	     invoice.interestsAmount
+	  </attribute>	
+	  <attribute name="penaltiesAmount" type="double">
+	     invoice.penaltiesAmount
+	  </attribute>						
+	  <attribute name="dueDate" type="java.util.Date">
+	     invoice.dueDate
+	  </attribute>
+	  <attribute name="transactionId" type="java.lang.String">
+		  request.transactionId
+	  </attribute>
+	  
+	  <!-- Dimension definition -->
+	  <dimension name="cycleDimension" class-name="br.com.auster.om.dynamic.CycleDimension">
+	    <attribute name="cycleCode" type="java.lang.String" key="true">
+	      invoice.cycleCode
+	    </attribute>
+	    <attribute name="cutDate" type="java.util.Date" key="true">
+	      invoice.cycleEndDate
+	    </attribute>
+	    <attribute name="issueDate" type="java.util.Date">
+	      invoice.issueDate
+	    </attribute>
+	    <attribute name="dueDate" type="java.util.Date" key="true">
+	      invoice.dueDate
+	    </attribute>
+	  </dimension>
+	  
+	  <!-- Dimension Definition -->
+	  <dimension name="accountDimension" class-name="br.com.auster.om.dynamic.AccountDimension">
+	    <attribute name="accountType" type="java.lang.String"  key="true">
+	      invoice.account.accountType
+	    </attribute>
+	    <attribute name="accountNumber" type="java.lang.String"  key="true">
+	      invoice.account.accountNumber
+	    </attribute>
+	  </dimension>
+	  
+	  <!-- Dimension Definition -->
+	  <dimension name="timeDimension" class-name="br.com.auster.om.dynamic.TimeDimension">
+	    <attribute name="year" type="java.lang.String"  key="true">
+		  if (invoice.cycleStartDate == null) { return; }
+	      Calendar calendar = Calendar.getInstance()
+	      calendar.setTime(invoice.cycleStartDate)
+	      calendar.get(Calendar.YEAR)+""
+	    </attribute>
+	    <attribute name="month" type="java.lang.String"  key="true">
+		  if (invoice.cycleStartDate == null) { return; }
+	      Calendar calendar = Calendar.getInstance()
+	      calendar.setTime(invoice.cycleStartDate)
+	      (calendar.get(Calendar.MONTH)+1)+""
+	    </attribute>
+	    <attribute name="day" type="java.lang.String"  key="true">
+		  if (invoice.cycleStartDate == null) { return; }
+	      Calendar calendar = Calendar.getInstance()
+	      calendar.setTime(invoice.cycleStartDate)
+	      calendar.get(Calendar.DATE)+""
+	    </attribute>
+	  </dimension>
+	  
+	  <!-- Dimension Definition -->
+	  <dimension name="geographicDimension" class-name="br.com.auster.om.dynamic.GeographicDimension">
+	    <attribute name="country" type="java.lang.String"  key="true">
+	      "Brasil"
+	    </attribute>
+	    <attribute name="state" type="java.lang.String"  key="true">
+	      invoice.account.accountState
+	    </attribute>
+	  </dimension>
+	  
+	  <!-- Dimension Definition -->
+	  <dimension name="carrierDimension" class-name="br.com.auster.om.dynamic.CarrierDimension">
+	    <attribute name="carrierCode" type="java.lang.String"  key="true">
+	      invoice.account.carrierCode
+	    </attribute>
+	    <attribute name="carrierState" type="java.lang.String"  key="true">
+	      invoice.account.accountState
+	    </attribute>
+	    <attribute name="carrierName" type="java.lang.String">
+				if (invoice.receipts[0] == null) {
+				 return "VIVO"
+				} 
+				return invoice.receipts[0].carrierName
+	    </attribute>
+	  </dimension>
+	  
+	</fact>
+	
+	
+</aggregation-config>

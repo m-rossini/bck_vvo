@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<project name="auster-invoice" default="cmdline.run">
+
+    <property environment="env"/>
+
+    <target name="cmdline.run">
+
+    <path id="run.classpath">
+       <fileset dir="${basedir}/lib" includes="*"/>
+     </path>
+
+     <java classname="br.com.auster.vivo.billcheckout.cmdline.CmdLineRequestManager" 
+           fork="yes"
+					 resultproperty="java.result"           
+           dir="${basedir}">
+        <sysproperty key="java.endorsed.dirs"
+             value="${basedir}/lib/endorsed"/>
+				<arg line="${cmdline.args}"/>
+     		<arg line="-c ${basedir}/conf/cmdline.properties"/>
+     		<arg line="-l ${basedir}/conf/cmdline-data-definition.xml"/>
+        <classpath>
+           <path refid="run.classpath"/>
+        </classpath>
+     </java>
+     
+    <fail message="Resultado do CMDLine" status="${java.result}">
+      <condition>
+        <or>
+          <not>
+            <isset property="java.result" />
+          </not>
+          <not>
+            <equals arg1="${java.result}" arg2="0" />
+          </not>
+        </or>
+      </condition>
+    </fail>
+         
+    </target>
+    
+</project>

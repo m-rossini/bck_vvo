@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<groovy-data-retriever-config id="setting-transactionId">
+	<data name='external_id'>
+		request.transactionId
+	</data>
+	<data name="setConsequenceTransactionId">
+		consequence_list.each() { result ->
+			result.transactionId = external_id;
+			result.filename = request.file.name;
+		}
+	</data>
+</groovy-data-retriever-config>
+

@@ -1,0 +1,21 @@
+<?xml version="1.0" ?>
+<report-configuration name="SimpleReportForRequestId">
+   <report-query>
+         SELECT distinct service_name, service_description
+         FROM prc_service 
+         WHERE service_external_id not in (
+		     SELECT consequence_label 
+			 FROM bck_consequence
+	         WHERE consequence_type = 'ServiceFound' 
+                 AND external_id = $P{PARAM_REQUEST_ID} 
+                 AND account_state = $P{PARAM_ACCT_STATE} )
+         ORDER BY service_name, service_description
+   </report-query>
+   <images>
+       <image name="APPLICATION_LOGO" path="jasper/img/bc_logo.png"/>
+       <image name="COMPANY_LOGO"     path="jasper/img/auster_logo.png"/>
+       <image name="CUSTOMER_LOGO"    path="jasper/img/vivo_logo.png"/>
+   </images>
+   <virtualizer enabled="true" threshold="5000"/>
+</report-configuration>
+

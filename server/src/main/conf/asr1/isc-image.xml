@@ -1,0 +1,247 @@
+<?xml version = "1.0" encoding = "UTF-8"?>
+
+<data-aware>
+
+	<log4j:configuration
+		xmlns:log4j="http://jakarta.apache.org/log4j/">
+
+		<appender name="FILE"
+			class="biz.minaret.log4j.DatedFileAppender">
+			<param name="Threshold" value="DEBUG" />
+			<param name="Directory" value="log" />
+			<param name="Prefix" value="image-generation-" />
+			<param name="Suffix" value=".log" />
+			<param name="Append" value="false" />
+			<layout class="org.apache.log4j.PatternLayout">
+				<param name="ConversionPattern"
+					value="%d{ABSOLUTE} %-5p [(%c{1}) %t] %m%n" />
+			</layout>
+		</appender>
+
+		<root>
+			<priority value="DEBUG" />
+			<appender-ref ref="FILE" />
+
+		</root>
+	</log4j:configuration>
+
+	<sql:configuration
+		xmlns:sql="http://www.auster.com.br/common/sql/">
+		<sql:database name="sql/billcheckoutdb">
+			<sql:statements path="conf/sql/image-sql.xml" />
+		</sql:database>
+	</sql:configuration>
+
+	<requests:configuration
+		xmlns:requests="http://www.auster.com.br/dware/requests/">
+
+		<builder name="sirs"
+			class-name="br.com.auster.dware.request.file.FileRequestBuilder">
+			<config bufferSize="262244" encoding="ISO-8859-1"
+				maxRecordSize="2048">
+				<record-key position="110" length="5" trim="false"
+					new-request-pattern=" 010D" />
+				<request-key record-key-pattern=" 010D">
+					<field name="key" position="1" length="15"
+						type="java.lang.String" />
+				</request-key>
+				<record key=" 010D">
+					<field name="dueDate" position="196" length="8" />
+					<field name="account" position="1" length="15" />
+				</record>
+			</config>
+		</builder>
+		<builder-chain name="default">
+			<builder name="sirs" />
+		</builder-chain>
+	</requests:configuration>
+
+	<!--
+		PRECISAMOS LIMPAR A TABELA DE CONTROLE!!!
+		<dw:bootstrap-listener
+		class-name="br.com.auster.billcheckout.listeners.BootstrapListener"
+		xmlns:dw="http://www.auster.com.br/dware/">
+		<config>
+		<database pool-name="sql/billcheckoutdb" />
+		</config>
+		</dw:bootstrap-listener>
+	-->
+
+	<dw:configuration name="invoice"
+		xmlns:dw="http://www.auster.com.br/dware/">
+		<dw:graph-manager>
+			<!-- CONFIGURACOES DE PRODUCAO -->
+			<dw:local-graph-group name="single-queue" max-graphs="1"
+				max-weight="80000001">
+			</dw:local-graph-group>
+
+			<dw:request-forwarder
+				class-name="br.com.auster.dware.manager.FIFOQueueReqForwarder" />
+
+		</dw:graph-manager>
+
+		<dw:startup-listener xmlns:dw="http://www.auster.com.br/dware/"
+			class-name="br.com.auster.vivo.billcheckout.listeners.ImageBuilderStartupListener">
+			<config start-char="6" end-char="8" attribute-key="cycle" />
+		</dw:startup-listener>
+
+		<dw:graph-design idle-timeout="10000">
+
+			<finish-listener
+				class-name="br.com.auster.vivo.billcheckout.listeners.ImageBuilderFinishListener">
+				<config pool-name="sql/billcheckoutdb"
+					output-dir="/stage/vivo/billcheckout/server/output/images/" />
+			</finish-listener>
+
+			<dw:filter name="InputFromFile"
+				class-name="br.com.auster.dware.filter.PartialInputFromFileList">
+				<dw:config buffer-size="16384" file-cache-size="10" />
+				<dw:connect-to name="Pipe" />
+			</dw:filter>
+
+			<dw:filter name="Pipe"
+				class-name="br.com.auster.dware.filter.PipeFilter">
+				<dw:connect-to name="Sirs2XML" />
+			</dw:filter>
+
+			<dw:filter name="Sirs2XML"
+				class-name="br.com.auster.dware.filter.XMLReaderFilter">
+				<dw:config
+					class-name="br.com.auster.udd.reader.TaggedFileReader">
+					<dw:xml-reader
+						udd-path="conf/sirs-definition-v7.xml" quiet-missing="true"
+						encrypted="false" />
+				</dw:config>
+				<dw:connect-to name="RequestDropper" />
+			</dw:filter>
+
+			<!-- Checks to see if the request is above a given threshold -->
+			<dw:filter name="RequestDropper"
+				class-name="br.com.auster.dware.filter.CHLimiterPipeFilter">
+				<dw:config max-size="50000000" pct-deviation="5">
+				</dw:config>
+				<dw:connect-to name="XMLSplitter" />
+			</dw:filter>
+
+			<dw:filter name="XMLSplitter"
+				class-name="br.com.auster.dware.filter.XMLManagerFilter">
+				<dw:config>
+					<dw:output name="XSLForHTMLFilter" format="HTML" />
+					<dw:output name="XSLForPDFFilter" format="PDF" />
+				</dw:config>
+				<dw:connect-to name="XSLForHTMLFilter" />
+				<dw:connect-to name="XSLForPDFFilter" />
+			</dw:filter>
+
+			<!--
+				HERE WE ARE BUILDING THE HTML VERSION OF THE INVOICE 
+			-->
+
+			<dw:filter name="XSLForHTMLFilter"
+				class-name="br.com.auster.dware.filter.XSLFilter">
+				<dw:config>
+					<dw:xsl-file path="conf/image/html/html.xsl"
+						encrypted="false" />
+				</dw:config>
+				<dw:connect-to name="HTMLSerializer" />
+			</dw:filter>
+
+			<dw:filter name="HTMLSerializer"
+				class-name="br.com.auster.dware.filter.XMLSerializerFilter">
+				<dw:config method="html" encoding="ISO-8859-1"
+					indent="true" indent-amount="0" />
+				<dw:connect-to name="Output2HTML" />
+			</dw:filter>
+
+			<dw:filter name="Output2HTML"
+				class-name="br.com.auster.dware.filter.OutputToFile">
+				<dw:config
+					prefix="/stage/vivo/billcheckout/server_parra/output/images/"
+					suffix=".html" format="HTML">
+					<dw:filename>
+						<dw:token>
+							<dw:format align="right" width="2"
+								fill-char="0">
+								<dw:insert-request-field name="cycle" />
+							</dw:format>
+						</dw:token>
+						<dw:token>/</dw:token>
+						<dw:token>
+							<dw:insert-request-field name="dueDate" />
+						</dw:token>
+						<dw:token>/</dw:token>
+						<dw:token>
+							<dw:format align="right" width="10"
+								fill-char="0">
+								<dw:insert-request-field name="account" />
+							</dw:format>
+						</dw:token>
+						<dw:token>/</dw:token>
+						<dw:token>ACCOUNT_</dw:token>
+						<dw:token>
+							<dw:format align="right" width="15"
+								fill-char="0">
+								<dw:insert-request-field name="account" />
+							</dw:format>
+						</dw:token>
+					</dw:filename>
+				</dw:config>
+			</dw:filter>
+
+			<!--
+				HERE WE ARE BUILDING THE PDF VERSION OF THE INVOICE 
+			-->
+
+			<dw:filter name="XSLForPDFFilter"
+				class-name="br.com.auster.dware.filter.XSLFilter">
+				<dw:config>
+					<dw:xsl-file path="conf/image/pdf/filterPDF.xsl"
+						encrypted="false" />
+				</dw:config>
+				<dw:connect-to name="BuildFOP" />
+			</dw:filter>
+
+			<dw:filter name="BuildFOP"
+				class-name="br.com.auster.dware.filter.FOPFilter">
+				<dw:config />
+				<dw:connect-to name="Output2PDF" />
+			</dw:filter>
+
+			<dw:filter name="Output2PDF"
+				class-name="br.com.auster.dware.filter.OutputToFile">
+				<dw:config
+					prefix="/stage/vivo/billcheckout/server_parra/output/images/"
+					suffix=".pdf" format="PDF">
+					<dw:filename>
+						<dw:token>
+							<dw:format align="right" width="2"
+								fill-char="0">
+								<dw:insert-request-field name="cycle" />
+							</dw:format>
+						</dw:token>
+						<dw:token>/</dw:token>
+						<dw:token>
+							<dw:insert-request-field name="dueDate" />
+						</dw:token>
+						<dw:token>/</dw:token>
+						<dw:token>
+							<dw:format align="right" width="10"
+								fill-char="0">
+								<dw:insert-request-field name="account" />
+							</dw:format>
+						</dw:token>
+						<dw:token>/</dw:token>
+						<dw:token>ACCOUNT_</dw:token>
+						<dw:token>
+							<dw:format align="right" width="15"
+								fill-char="0">
+								<dw:insert-request-field name="account" />
+							</dw:format>
+						</dw:token>
+					</dw:filename>
+				</dw:config>
+			</dw:filter>
+
+		</dw:graph-design>
+	</dw:configuration>
+</data-aware>

@@ -1,0 +1,2 @@
+Tabelas alteradas!
+  Foi criado as sequences para o funcionamento da opção de insert pelo aplicativo PARAMETROS E CONFIGURAÇÕES.

@@ -1,0 +1,236 @@
+package br.com.auster.rules.vivo.R23;
+
+import java.util.Iterator;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.List;
+import java.util.Map.Entry;
+
+import br.com.auster.common.lang.NamedDouble;
+import br.com.auster.common.lang.NamedHashMap;
+
+import br.com.auster.common.rules.GlobalForLog;
+
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.SectionDetail;
+import br.com.auster.om.invoice.ServiceDetail;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.vivo.billcheckout.util.InvoiceUtils;
+import br.com.auster.vivo.billcheckout.pricing.SQLPricingFacadeImpl;
+
+import br.com.auster.vivo.billcheckout.cache.vo.PromotionTypesVO;
+import br.com.auster.vivo.billcheckout.cache.vo.PromotionEnrollmentsVO;
+import br.com.auster.vivo.billcheckout.cache.vo.PromotionRangesVO;
+
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.cache.DataBarnUsagePromotions dbservicesR23;
+global br.com.auster.om.pricing.PricingFacade priceEngine;
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results; 
+
+#
+#
+rule "Regra 23-INIT" salience 80
+    when
+    	Invoice()
+    then    
+	    #GlobalForLog.log("DEBUG", "R23-Begin");
+		if (dbservicesR23 == null) {
+			GlobalForLog.log("WARN", "Access to databarn information regarding to promotions & discounts is NOT enabled.");
+			return;
+		}
+		
+		List types = dbservicesR23.getPromotionTypes("PromotionTypes");
+	    #GlobalForLog.log("DEBUG", "Types:" + types);
+	    Iterator it;
+		for (it=types.iterator(); it.hasNext();) {
+			PromotionTypesVO vo = (PromotionTypesVO) it.next();
+			insert(vo);
+		}
+end
+
+rule "Regra 23-INITCheckedPromotions" salience 70
+    when
+    	$inv :  Invoice()
+    	not (NamedHashMap(name=="R23EnrollmentsForAccount") )
+    then    
+	    #GlobalForLog.log("DEBUG", "R23-INITCheckedPromotions");
+		if (dbservicesR23 == null) {
+			GlobalForLog.log("WARN", "Access to databarn information regarding to promotions & discounts is NOT enabled.");
+			return;
+		}
+		
+		Map enrollments = dbservicesR23.getSubscriptionEnrollmentByAccount("PromotionEnrollments", new Object[]{$inv.getAccount().getAccountNumber()});
+		if (enrollments.size() != 0) {
+			NamedHashMap named = new NamedHashMap("R23EnrollmentsForAccount");
+			named.put($inv.getAccount().getAccountNumber(), enrollments);
+			insert(named);
+		    #GlobalForLog.log("DEBUG", "Enrollments:" + enrollments);
+		}
+end
+
+//Here we insert the enrollments for a Subscription
+//Here we insert also, the ranges for that enrollment 
+rule "Regra 23-INITRanges" salience 60
+    when
+    	$inv :  Invoice()
+    	$named  : NamedHashMap(name=="R23EnrollmentsForAccount")
+    	$states : NamedHashMap(name=="SQLWhereStates")
+    	$sec : Section( 
+    				 elementType == "SUBSCRIPTION_INFO"
+    				,subscriptionIdEqualsToChannelId == false
+    				,$sub : subscriptionid 
+    				) 
+    then    
+    
+    	//TODO Needs to check service area
+	    #GlobalForLog.log("DEBUG", "R23-INITRanges");
+		if (dbservicesR23 == null) {
+			GlobalForLog.log("WARN", "Access to databarn information regarding to promotions & discounts is NOT enabled.");
+			return;
+		}
+
+		#Gets the Map with enrollments for all Subs of a given accoutn
+		Map enrollments = (Map) $named.get($inv.getAccount().getAccountNumber());
+		#GlobalForLog.log("DEBUG", "Enrollment MAP on rule:" + enrollments);				
+		if (enrollments == null) {
+			#GlobalForLog.log("DEBUG", "No enrollments for account:" + $inv.getAccount().getAccountNumber());
+			return;
+		}
+		
+		#Gets the Enrollments for the given Sub.
+		#GlobalForLog.log("DEBUG", "Sub for Enrollments:" + $sub);	
+		List lista = (List) enrollments.get($sub);
+		#GlobalForLog.log("DEBUG", "Enrollment List on rule:" + lista);	
+		if (lista == null) {
+			return;
+		}
+		Map ranges=null;
+		Iterator it;
+		for (it=lista.iterator(); it.hasNext();) {
+			PromotionEnrollmentsVO enrollVO = (PromotionEnrollmentsVO) it.next();
+			#GlobalForLog.log("DEBUG", "Enrollment VO on rule:" + enrollVO);	
+			ranges = dbservicesR23.getPromotionRangesById("PromotionRanges", new Object[] {enrollVO.getMarketingProgramId()});			
+			#GlobalForLog.log("DEBUG", "Ranges MAP:" + ranges);	
+			insert(enrollVO);			
+		}	
+		if (ranges == null) {
+			return;
+		}
+		Iterator it;
+		for (it=ranges.values().iterator();it.hasNext();) {
+			List rangeList = (List) it.next();
+		    #GlobalForLog.log("DEBUG", "R23-RangeList:" + rangeList);	
+		    Iterator itRange;		
+			for (itRange=rangeList.iterator();itRange.hasNext();) {
+				PromotionRangesVO vo = (PromotionRangesVO) itRange.next();
+				insert(vo);			
+			}
+		}
+end
+
+rule "Regra 23-Check Subscription Level Discount" salience 55
+    when   	    
+		$range : PromotionRangesVO(  
+					$ini : beginCycle 
+					,$fim : endCycle
+					,$appInd : applicationIndicator 
+					,promotionAtSubscriptionLevel == true
+					,$mktid : marketingProgramId )
+					
+		$enroll : PromotionEnrollmentsVO(marketingProgramId == $mktid)
+		
+		$sec : Section(elementType =="ACTIVATION_DETAIL")
+		
+    	$states : NamedHashMap(name=="SQLWhereStates")
+    then    
+	    #GlobalForLog.log("DEBUG", "R23-Teste.Range:" + $range + ".Enroll:" + $enroll);
+	    #GlobalForLog.log("DEBUG", "R23-Teste.SubSections:" + $sec.getSubSections());
+	    #GlobalForLog.log("DEBUG", "R23-Teste.Details:" + $sec.getDetails());
+	    double baseAcum=0	;
+	    double chargedAcum=0;
+	    Iterator it;
+	    for (it=$sec.getDetails().iterator();it.hasNext();) {
+	    
+	    //TODO NEeds to check the service name
+			String st = (String) $states.get($sec.getInvoice().getAccount().getAccountState());		
+			String[] parms = st.split(",");
+			SQLPricingFacadeImpl pric = (SQLPricingFacadeImpl) priceEngine;
+			pric.setQueryListParameters(parms);	    
+	    	ServiceDetail sd = (ServiceDetail) it.next();
+	    	double factor = InvoiceUtils.calculateProRata(sd.getStartDate(), sd.getEndDate()); 
+	    	if (!priceEngine.hasSubscriptionFee(sd)) {
+    		    #GlobalForLog.log("ERROR", "R23-No subscription fee for:" + sd.getCaption());
+		    	continue;
+	    	}
+	    	double basePrice = priceEngine.calculateSubscriptionFeeFor(sd) * factor;    	
+		    #GlobalForLog.log("DEBUG", "Factor:"+ factor + ".Base:" + basePrice + ".Charged:" + sd.getTotalAmount());
+		    if (sd.getTotalAmount() > 0 ) {
+		    	baseAcum += basePrice;
+		    }
+		    chargedAcum += sd.getTotalAmount();    	
+	    }
+	    double reward=$range.getRewardAmount();
+	    double chargedShouldBe=0;
+	    if ($range.isApplicationInPercentage()) {
+		    chargedShouldBe=baseAcum * (1 - (reward/100));
+	    }
+	    if ($range.isApplicationInMoney()) {
+			chargedShouldBe	 = baseAcum -  reward; 
+	    }
+	    
+	    if ( Math.abs( Math.abs(chargedShouldBe) - Math.abs(chargedAcum) ) > 0.01) {
+			if ($ini != $fim) {
+				consequenceBuilder.setRule("R23-1","Promoção Inválida"); 
+				consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+				consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+				consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+				consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+				consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($sec.getInvoice().getAccount().getCarrierCode()));			
+				TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+				c.setDescription("Desconto na Assinatura não concedido.");	
+						
+				c.addAttribute("Número de Acesso", $sec.getAccessNbr());
+				c.addAttribute("Valor Calculado", ValueFormat.formatValue(chargedShouldBe));
+				c.addAttribute("Valor Demonstrado", ValueFormat.formatValue(chargedAcum));									                     
+				c.addAttribute("Quantidade Máxima", ValueFormat.formatQuantity($fim));				
+				c.addAttribute("Quantidade Mínima", ValueFormat.formatQuantity($ini));				
+		        
+			    results.add(c); 
+			}
+	    } else {
+			if ($ini == $fim) {
+				consequenceBuilder.setRule("R23-2","Promoção Inválida"); 
+				consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+				consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+				consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+				consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+				consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($sec.getInvoice().getAccount().getCarrierCode()));			
+				TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+				c.setDescription("Desconto na Assinatura concedido a mais.");	
+				
+				c.addAttribute("Número de Acesso", $sec.getAccessNbr());
+				c.addAttribute("Valor Calculado", ValueFormat.formatValue(chargedShouldBe));
+				c.addAttribute("Valor Demonstrado", ValueFormat.formatValue(chargedAcum));		
+				c.addAttribute("Quantidade Máxima", ValueFormat.formatQuantity($fim));				
+				c.addAttribute("Quantidade Mínima", ValueFormat.formatQuantity($ini));											                     
+								        
+			    results.add(c); 
+			}	    
+	    }
+		#GlobalForLog.log("DEBUG", "Charged:"+ chargedAcum + ".Base:" + baseAcum + ".ShouldBe:" + chargedShouldBe);
+end

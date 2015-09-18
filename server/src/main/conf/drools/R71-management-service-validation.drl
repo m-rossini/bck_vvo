@@ -1,0 +1,173 @@
+#created on: 11/01/2008
+package br.com.auster.rules.vivo.R71
+
+#list any import classes here.
+import java.util.List;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.ServiceDetail;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoDimensionsFacade;
+
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.common.lang.NamedDouble;
+import br.com.auster.common.lang.NamedHashMap;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+
+import br.com.auster.common.text.ValueFormat;
+
+#declare any global variables here
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+
+
+function void buildR71Consequence(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		String code, String description, Section sec) {
+	
+		consequenceBuilder.setRule(code, "Dados Cadastrais do Cliente"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(sec.getInvoice().getAccount().getCarrierCode()));
+	
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription(description);
+	    c.addAttribute("Conta", sec.getInvoice().getAccount().getAccountNumber());			    
+	    c.addAttribute("Ciclo", sec.getInvoice().getCycleCode());	
+	    c.addAttribute("Número do Terminal", ValueFormat.formatPhone(sec.getChannelId()));
+	    c.addAttribute("Estado", sec.getCarrierState());
+		//c.addAttribute("Nome do Erro", sec.getPlanName());
+		results.add(c);  
+}
+
+
+rule "71-1 Subs. com Serv.Gestao sem Pacote"
+	salience 90
+	when
+		not NamedHashMap(name == "SplitBillingAccount") // exclude split billing accounts from validation
+			
+		$sec : Section( elementType == "ADDITIONAL_SERVICES_TOTAL" )		
+		
+		$servDetail1 : ServiceDetail( elementType == "ADDITIONAL_SERVICES_DETAIL",
+									  caption == "SERVICO GESTAO",
+									  section == $sec
+									)
+	
+		not $servDetail2 : ServiceDetail( elementType == "ADDITIONAL_SERVICES_DETAIL",
+									  	  section == $sec,
+									      caption ( (== "PACOTE GESTAO COMPLETO") || 
+									  		       	(== "PACOTE GESTÃO COMPLETO") || 
+									  		       	(== "PACOTE GESTAO LIGHT") || 
+									  		       	(== "PACOTE GESTÃO LIGHT") || 
+									  		       	(== "PACOTE GESTÃO CONTROLE CONSUMO") || 
+									  		       	(== "PACOTE GESTÃO CONTROLE DE CONSUMO") )
+   							   			 )
+   							   			 
+		$section : Section( elementType  == "SUBSCRIPTION_INFO",
+				    	 	 subSections  contains $sec					     
+				   		   )	   							   			 
+	then 
+	    buildR71Consequence(results, dimensionCache, consequenceBuilder, "R71-1", 
+	    					"Terminal com Serviço Gestão sem um dos Pacotes Obrigatórios.", $section);
+end
+
+
+rule "71-2a Verif. quais Subs. tem Serv.Gestao"
+	salience 80
+	when 
+		not NamedDouble ( name == "PossuiServicoGestao" )	
+		
+		exists ( ServiceDetail( elementType == "ADDITIONAL_SERVICES_DETAIL",
+								caption == "SERVICO GESTAO") )	
+	then
+		insert(new NamedDouble("PossuiServicoGestao"));
+end	
+
+
+rule "71-2b Subs que deveriam ter Serv.Gestao"
+	salience 70
+	when		
+	
+		NamedDouble ( name == "PossuiServicoGestao" )			
+
+		$section : Section( elementType  == "SUBSCRIPTION_INFO",
+						    $subId : subscriptionid,  
+				    		subscriptionid != channelId)	
+				   		  
+		$sec : Section( elementType == "ADDITIONAL_SERVICES_TOTAL", 
+						subscriptionid == $subId )	
+
+		not $servDetail : ServiceDetail( elementType == "ADDITIONAL_SERVICES_DETAIL",
+									     caption == "SERVICO GESTAO",
+									     section == $sec )	
+	then
+	    buildR71Consequence(results, dimensionCache, consequenceBuilder, "R71-2", 
+	    					"Conta com Terminais Gestão e Terminais não Gestão.", $section);
+end
+
+rule "71-2c Subs que deveriam ter Serv.Gestao"
+	salience 70
+	when		
+	
+		NamedDouble ( name == "PossuiServicoGestao" )			
+
+		$section : Section( elementType  == "SUBSCRIPTION_INFO",
+						    $subId : subscriptionid,  
+				    		subscriptionid != channelId)	
+				   		  
+		not $sec : Section( elementType == "ADDITIONAL_SERVICES_TOTAL", 
+							subscriptionid == $subId )	
+
+	then
+	   	buildR71Consequence(results, dimensionCache, consequenceBuilder, "R71-2", 
+	    					"Conta com Terminais Gestão e Terminais não Gestão.", $section);
+end
+
+
+rule "71-3b Conta Split Billing sem Serv.Gestao"
+	salience 70
+	when		
+		NamedDouble ( name == "SplitBillingAccount" ) // Conta com Split Billing	
+
+		$section : Section( elementType  == "SUBSCRIPTION_INFO",
+						    $subId : subscriptionid,  
+				    		subscriptionid != channelId)	
+				   		  
+		$sec : Section( elementType == "ADDITIONAL_SERVICES_TOTAL", 
+						subscriptionid == $subId )	
+
+		not $servDetail : ServiceDetail( elementType == "ADDITIONAL_SERVICES_DETAIL",
+									     caption == "SERVICO GESTAO",
+									     section == $sec )	
+	then
+	    buildR71Consequence(results, dimensionCache, consequenceBuilder, "R71-3", 
+	    					"Conta com Serviço Split Billing e Terminal sem Serviço Gestão.", $section);
+end
+
+rule "71-3c Conta Split Billing sem Serv.Gestao"
+	salience 70
+	when		
+		NamedDouble ( name == "SplitBillingAccount" ) // Conta com Split Billing		
+
+		$section : Section( elementType  == "SUBSCRIPTION_INFO",
+						    $subId : subscriptionid,  
+				    		subscriptionid != channelId)	
+				   		  
+		not $sec : Section( elementType == "ADDITIONAL_SERVICES_TOTAL", 
+							subscriptionid == $subId )	
+
+	then
+	   	buildR71Consequence(results, dimensionCache, consequenceBuilder, "R71-3", 
+	    					"Conta com Serviço Split Billing e Terminal sem Serviço Gestão.", $section);
+end

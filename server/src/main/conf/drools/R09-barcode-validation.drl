@@ -1,0 +1,216 @@
+package br.com.auster.rules.vivo.R09;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.vivo.billcheckout.util.DimensionCache ;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.om.invoice.BarCode;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.billcheckout.consequence.Consequence;
+
+import br.com.auster.common.util.CommonsServicesBarCode;
+import br.com.auster.common.lang.NamedHashMap;
+import br.com.auster.vivo.billcheckout.util.VivoBarCode;
+
+global java.util.List results;
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+
+function String formatBarCode(String barCode){
+	if(barCode.length() == 48){
+		StringBuffer barCodeFinal = new StringBuffer(barCode.substring(0,12));
+		for(int i=1; i<4; i++){
+			barCodeFinal.append(" "+ barCode.substring((0+(i*12)), (12*(i+1))));
+		}
+		return barCodeFinal.toString();
+	}else {
+		return barCode;
+	}
+}
+
+function TelcoConsequence buildR09Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		String carrier, String ruleNbr, String desc, String barCode) {
+		
+  consequenceBuilder.setRule(ruleNbr,"Código de Barras Inválido"); 
+  consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+  consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+  consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+  consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+  consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(carrier));
+
+  TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+  c.setDescription(desc);	
+  c.addAttribute("Bar Code", formatBarCode(barCode));
+
+  return c;
+
+}
+/**
+ * RULE #9: Validação da Estrutura do Código de Barras
+ */
+ 
+// Cria o mapeamento de estado/codigo de empresa
+rule "R09-00"
+salience 60
+when
+	not (  NamedHashMap( name == "R09BarCode" ) )
+	
+	Account ( $originalAccountState : originalAccountState,
+			  $carrierCode : carrierCode )
+			  
+	BarCode( $code : OCRRightLine )	
+then
+	NamedHashMap cod = new NamedHashMap("R09BarCode");
+	
+    ######### INICIO DA PARAMETRIZAÇÃO #########
+	cod.put("AC","0053");
+	cod.put("AM","0073");	
+	cod.put("AP","0076");	
+	cod.put("BA","0041");	
+	cod.put("DF","0047");	
+	cod.put("ES","0060");	
+	cod.put("GO","0044");	
+	cod.put("MA","0074");	
+	cod.put("MS","0049");	
+	cod.put("MT","0055");	
+	cod.put("PA","0072");	
+	cod.put("PR","0069");	
+	cod.put("RJ","0048");	
+	cod.put("RO","0058");	
+	cod.put("RR","0075");	
+	cod.put("SC","0069");	
+	cod.put("SE","0042");	
+	cod.put("SP","0080");	
+	cod.put("TO","0081");	
+	cod.put("RS","0079");	
+	cod.put("GF","0047");	
+	//Novas CSA's
+	cod.put("PB","0290");
+	cod.put("AL","0291");
+	cod.put("PE","0292");
+	cod.put("CE","0293");
+	cod.put("PI","0294");
+	cod.put("RN","0295");
+	######### FIM DA PARAMETRIZAÇÂO #########
+	if (cod.get($originalAccountState) == null) {
+		results.add(buildR09Consequence(dimensionCache, consequenceBuilder, $carrierCode,
+          "R09-00", "Estado Inexistente na tabela de referência", $code));
+	} else { 
+		insert(cod);
+	}		
+end
+
+ 
+rule "Regra R09-1"
+	salience 0
+	when
+		$acc : Account($carrierCode : carrierCode)	
+		
+		$inv : Invoice( 
+			account == $acc,
+			totalAmount > 0
+		)
+		$barcode : BarCode( $code : OCRRightLine )
+		eval( ! CommonsServicesBarCode.validateBarCode($code) )
+	then
+   
+        results.add(buildR09Consequence(dimensionCache, consequenceBuilder, $carrierCode,
+          "R09-1", "Código de Barras Inválido", $code));
+end
+
+rule "Regra R09-2"
+	salience 0
+	when
+		$acc : Account(
+			$carrierCode : carrierCode )	
+			
+		$inv : Invoice( 
+			account == $acc,
+			totalAmount > 0
+		)
+		$barcode : BarCode( $code : OCRRightLine )
+		eval( ! CommonsServicesBarCode.TELECOM_SEGMENT_CODE.equals(CommonsServicesBarCode.getSegmentId($code)) )
+	then        
+        results.add(buildR09Consequence(dimensionCache, consequenceBuilder, $carrierCode,
+          "R09-2",  "Segmento do Código de Barras Não é TELECOM", $code));
+end
+
+rule "Regra R09-3"
+	salience 0
+	when
+		$acc : Account(
+			$carrierCode : carrierCode )
+				
+		$inv : Invoice( 
+			account == $acc,
+			totalAmount > 0
+		)
+		$barcode : BarCode( $code : OCRRightLine )		
+	    eval ( ! CommonsServicesBarCode.CURRENCY_VALUE_INDICATOR.equals(CommonsServicesBarCode.getValueIndicatorCode($code)) )
+    then
+        results.add(buildR09Consequence(dimensionCache, consequenceBuilder, $carrierCode,
+          "R09-3", "Indicador de Valor Não é Moeda", $code));
+end
+
+rule "Regra R09-4"
+	salience 0
+	when
+		$acc : Account(
+			$carrierCode : carrierCode, 			
+			$accNo : accountNumber )	
+			
+		$inv : Invoice( 
+			$due : dueDate ,
+			account == $acc,
+			$amt : totalAmount > 0
+		)
+		$barcode : BarCode( $code : OCRRightLine )	
+	    eval ( ! VivoBarCode.validateCustomField($barcode, $accNo, $due, $amt) )
+	then
+        results.add(buildR09Consequence(dimensionCache, consequenceBuilder, $carrierCode,
+          "R09-4",  "Dados no Campo Customizado Não Conferem", $code));
+end
+
+rule "Regra R09-5"
+	salience 0
+	when
+		$acc : Account(
+			$carrierCode : carrierCode )	
+		
+		$inv : Invoice( 
+			account == $acc,
+			$amt : totalAmount > 0
+		)
+		
+		$barcode : BarCode( 
+			$alpha : alphaNumericBarCode ,
+			$code : OCRRightLine )	
+	    eval ( ! CommonsServicesBarCode.validateEncoding($alpha, $code) )	
+    then        
+        results.add(buildR09Consequence(dimensionCache, consequenceBuilder, $carrierCode,
+          "R09-5", "Formato Alfa-numérico Não Confere com Formato Numérico", $code));
+end
+
+
+rule "Regra R09-06"
+	salience 0
+	when
+		Account ( 
+			$carrierCode : carrierCode,
+			$originalAccountState : originalAccountState )
+			
+		$map : NamedHashMap( name == "R09BarCode" )
+		BarCode( $code : OCRRightLine )
+		eval ( ! $map.get($originalAccountState).equals(CommonsServicesBarCode.getCustomField($code).substring(0,4)) )			
+	then
+        results.add(buildR09Consequence(dimensionCache, consequenceBuilder, $carrierCode,
+          "R09-6",  "Código da Empresa Inexistente ou não confere com o estado", $code));
+end

@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<locator xmlns:log4j="http://www.apache.org/log4j/">
+	
+	<!--                      -->
+	<!--    log definition    -->
+	<!--                      -->
+	<log-service class-impl="br.com.auster.facelift.services.log.LogService">
+		<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/">
+		</log4j:configuration>
+	</log-service>
+	<!--                      -->
+	<!--  plugin definition   -->
+	<!--                      -->
+	<plugin-service
+		class-impl="br.com.auster.facelift.services.plugin.impl.XMLPluginService">
+		<configuration
+			executor="br.com.auster.facelift.services.plugin.impl.SimplePluginExecutor">
+			<plugins>
+				<!-- when any proc. request has changed status -->
+				<plugin plugin-point="webrequest.updated.procRequest.status"
+					class-impl="br.com.auster.dware.console.plugins.ProcRequestsFinishedPlugin"/>
+				<!-- when a web request is created -->
+				<plugin plugin-point="webrequest.created" priority="99"
+					class-impl="br.com.auster.dware.console.plugins.PostRequestToServer">
+					<parameters>
+						<parameter name="rmiserver.url">//localhost:2004/billcheckout</parameter>
+						<parameter name="chain.name">default</parameter>
+						<parameter name="chain.builder">sirs</parameter>
+					</parameters>
+				</plugin>
+				<plugin plugin-point="webrequest.resumed"
+					class-impl="br.com.auster.dware.console.plugins.ResumeRequestToServer">
+					<parameters>
+						<parameter name="rmiserver.url">//localhost:2004/billcheckout</parameter>
+						<parameter name="chain.name">default</parameter>
+						<parameter name="chain.builder">sirs</parameter>
+					</parameters>
+				</plugin>
+				
+				<!-- 
+				Sends a notification email, when specified in request creation time. This
+				plugin is triggered each time a WEB_REQUEST finishes, either with status 
+				FINSISHED (=3) or ERROR (=4).
+				-->
+				<plugin plugin-point="webrequest.updated.status" trigger-value="3"
+					priority="99"
+					class-impl="br.com.auster.dware.console.plugins.SendEmailNotificationPlugin">
+					<parameters>
+						<parameter name="email.xsl.file">
+							conf/requests/emailFormat.xsl</parameter>
+						<parameter name="email.subject">Sua requisição foi
+							processada</parameter>
+						<parameter name="email.datasource">
+							/facelift/mail</parameter>
+					</parameters>
+				</plugin>
+				<plugin plugin-point="webrequest.updated.status" trigger-value="4"
+					priority="99"
+					class-impl="br.com.auster.dware.console.plugins.SendEmailNotificationPlugin">
+					<parameters>
+						<parameter name="email.xsl.file">
+							conf/requests/emailFormat.xsl</parameter>
+						<parameter name="email.datasource">
+							/facelift/mail</parameter>
+						<parameter name="email.subject">Sua requisição foi
+							processada</parameter>
+					</parameters>
+				</plugin>
+
+				<!-- 
+					Bundles all TXT files, generated in the WEB_REQUEST, in a single ZIP file. This 
+						plugin is triggered each time a WEB_REQUEST finishes, either with status 
+						FINSISHED (=3) or ERROR (=4).
+				 -->
+				 <plugin plugin-point="webrequest.updated.status"
+							trigger-value="3"
+							priority="90"
+							class-impl="br.com.auster.dware.console.plugins.BundleAllFiles">
+						<parameters>
+						 <parameter name="message">Todos os arquivos gerados</parameter>
+								<parameter name="output-dir">/opt/Billc/report/output</parameter>
+								<parameter name="file-prefix">BCK_ALLFILES</parameter>
+						</parameters>
+				</plugin>
+				 <plugin plugin-point="webrequest.updated.status"
+							trigger-value="4"
+							priority="90"
+							class-impl="br.com.auster.dware.console.plugins.BundleAllFiles">
+						<parameters>
+						   <parameter name="message">Todos os arquivos gerados</parameter>
+								<parameter name="output-dir">/opt/Billc/report/output</parameter>
+								<parameter name="file-prefix">BCK_ALLFILES</parameter>
+						</parameters>
+				</plugin>
+
+
+				<!-- 
+					Informs Topic Subcribers that Request Has Ended its processing in Portal.
+				-->
+				<plugin plugin-point="webrequest.updated.status" trigger-value="3"
+					priority="99"
+					class-impl="br.com.auster.dware.console.plugins.SendTransactionFinishedCommand">
+					<parameters>
+						<parameter name="jms.factory">/billcheckout/QueueConnectionFactory</parameter>
+						<parameter name="jms.name">/topic/cmdlineTopic</parameter>
+					</parameters>
+				</plugin>
+				<plugin plugin-point="webrequest.updated.status" trigger-value="4"
+					priority="99"
+					class-impl="br.com.auster.dware.console.plugins.SendTransactionFinishedCommand">
+					<parameters>
+						<parameter name="jms.factory">/billcheckout/QueueConnectionFactory</parameter>
+						<parameter name="jms.name">/topic/cmdlineTopic</parameter>
+					</parameters>
+				</plugin>
+												
+				<!-- 
+					Triggers all report generations.
+				-->
+				<plugin plugin-point="webrequest.updated.status" trigger-value="3"
+					priority="99"
+					class-impl="br.com.auster.dware.console.plugins.SendReportGenerationCommand">
+					<parameters>
+						<parameter name="jms.factory">/billcheckout/QueueConnectionFactory</parameter>
+						<parameter name="jms.name">/topic/reportTopic</parameter>
+						<parameter name="report.name">billcheckout-portal</parameter>
+					</parameters>
+				</plugin>
+				<plugin plugin-point="webrequest.updated.status" trigger-value="4"
+					priority="99"
+					class-impl="br.com.auster.dware.console.plugins.SendReportGenerationCommand">
+					<parameters>
+						<parameter name="jms.factory">/billcheckout/QueueConnectionFactory</parameter>
+						<parameter name="jms.name">/topic/reportTopic</parameter>
+						<parameter name="report.name">billcheckout-portal</parameter>
+					</parameters>
+				</plugin>
+			</plugins>
+		</configuration>
+	</plugin-service>
+	
+	<!--                      -->
+	<!--   properties conf.   -->
+	<!--                      -->
+	<properties-service
+		class-impl="br.com.auster.facelift.services.properties.MappedPropertyHandler">
+		<configuration default-realm="default">
+			<realms>
+				<!-- REALM used by web application -->
+				<realm name="default" file="conf/properties/default.properties"/>
+			</realms>
+		</configuration>
+	</properties-service>
+	
+	<!--                      -->
+	<!-- services definition  -->
+	<!--                      -->
+	<services>
+		<service id="console.user" type="local"
+			class-impl="br.com.auster.facelift.users.jdbc.UserManagerImpl">
+			<configuration
+				persistence="br.com.auster.persistence.jdbc.JNDIJDBCPersistenceService">
+				<persistence-configuration jndi-name="/billcheckout/portalDB"
+					tx-jndi="javax.transaction.TransactionManager"/>
+				<security file="conf/users/security.properties"
+					security-context="bcportal"/>
+			</configuration>
+		</service>
+		<service id="console.request" type="local"
+			class-impl="br.com.auster.facelift.requests.web.jdbc.WebRequestManagerImpl">
+			<configuration
+				persistence="br.com.auster.persistence.jdbc.JNDIJDBCPersistenceService">
+				<persistence-configuration jndi-name="/billcheckout/portalDB"
+					tx-jndi="javax.transaction.TransactionManager"/>
+			</configuration>
+		</service>
+	</services>
+</locator>

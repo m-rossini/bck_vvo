@@ -1,0 +1,775 @@
+﻿<?xml version = "1.0" encoding = "UTF-8"?>
+<root>
+  <sql:configuration xmlns:sql="http://www.auster.com.br/common/sql/">
+    <sql:statements>
+
+		<sql:statement name="ContractBreakPenalty">
+        <sql:query>
+		SELECT a.seq_no, a.accessno, a.accountno, a.subid, a.svcnbr,
+		       a.chargetypeid, a.captiontext, a.effectivedate, a.expirationdate,
+		       a.negotamt, a.negotpct, a.baseamt, a.period, a.sp_area_id,
+		       a.tax_category, a.dt_exp_agr, a.dt_eff_agr, a.servicename,
+		       a.origem, a.negot_type, a.tax_included
+		  FROM r68_contractcancel a
+		  WHERE a.accountno = ?
+		  and dt_eff_agr &lt;= to_date(?,'yyyymmdd') -- corte
+		  and (dt_exp_agr is null or dt_exp_agr between to_date(?,'yyyymmdd') and to_date(?,'yyyymmdd')) -- inicio e corte
+		  and (   (expirationDate is null and effectiveDate &lt;= to_date(?,'yyyymmdd')) -- corte
+		       or (expirationDate is not null 
+		           and expirationDate &gt;= to_date(?,'yyyymmdd') -- inicio
+		           and effectiveDate &lt;= to_date(?,'yyyymmdd') -- corte
+		          )
+		      )
+		  AND a.accountno = ?
+		  AND chargeTypeId in ( 'CANCEL', 'CANCELADO', 'PERMBAS12', 'CAN0000000000000000000000','MUL0000000000000000000000', 'CON0000000000000000000000')
+		  and dt_eff_agr &lt;= to_date(?,'yyyymmdd') -- corte
+		  and (dt_exp_agr is null or dt_exp_agr between to_date(?,'yyyymmdd') and to_date(?,'yyyymmdd')) -- inicio e corte
+		  and effectiveDate &lt;= to_date(?,'yyyymmdd') -- corte
+		  and (expirationDate is null or expirationDate &gt;= to_date(?,'yyyymmdd')) -- inicio
+		  and dt_exp_agr &lt;&gt; dt_eff_agr
+        </sql:query>
+				<sql:param index="1" type="String" />
+				<sql:param index="2" type="String" />
+				<sql:param index="3" type="String" />
+				<sql:param index="4" type="String" />
+				<sql:param index="5" type="String" />
+				<sql:param index="6" type="String" />
+				<sql:param index="7" type="String" />
+				<sql:param index="8" type="String" />
+				<sql:param index="9" type="String" />
+				<sql:param index="10" type="String" />
+				<sql:param index="11" type="String" />
+				<sql:param index="12" type="String" />
+				<sql:param index="13" type="String" />
+    </sql:statement>
+	<sql:statement name="PriorityOrder">
+        <sql:query>
+        SELECT DISTINCT 
+        SBSCRP_ID, 
+        CAPTN_TEXT,
+        svc_name,
+        PRCNG_PRI, 
+        SVC_AGRMNT_EFF_DT, 
+        SVC_AGRMNT_TRMNTN_DT,
+        SBSCRP_SVC_EFF_DT, 
+        SBSCRP_SVC_EXPR_DT 
+		FROM r56_priority_order
+		WHERE		
+		sbscrp_id = ?
+		and ((svc_agrmnt_trmntn_dt is null and SVC_AGRMNT_EFF_DT &lt;= to_date(?,'yyyymmdd')) 
+		    or (svc_agrmnt_trmntn_dt is not null 
+		        and svc_agrmnt_trmntn_dt &gt;= to_date(?,'yyyymmdd')
+		        and svc_agrmnt_eff_dt &lt;= to_date(?,'yyyymmdd'))) 
+		and ((SBSCRP_SVC_EXPR_DT is null  
+		      and SBSCRP_SVC_EFF_DT &lt;= to_date(?,'yyyymmdd')) 
+		    or (SBSCRP_SVC_EXPR_DT is not null 
+		      and SBSCRP_SVC_EXPR_DT &gt;= to_date(?,'yyyymmdd')
+		      and SBSCRP_SVC_EFF_DT &lt;= to_date(?,'yyyymmdd')))         									
+        </sql:query>
+				<sql:param index="1" type="String" />				
+				<sql:param index="2" type="String" />				
+				<sql:param index="3" type="String" />				
+				<sql:param index="4" type="String" />	
+				<sql:param index="5" type="String" />				
+				<sql:param index="6" type="String" />				
+				<sql:param index="7" type="String" />							
+    </sql:statement>
+		<sql:statement name="InterestFee">
+        <sql:query>      
+		SELECT a.cycle_cd, a.acct_nbr, a.carriercode, a.carrierstate,
+	       a.valortotal, a.data_multa_juros, a.valor_multa_juros,
+	       a.tipo_cobranca, a.data_pagamento,
+	       a.data_vencimento_pagto, a.data_vencto_apl_juros_multas,
+	       a.dat_ref_apl_juros_multa, a.docamt
+		  FROM r69_82_interestfee a
+		  WHERE a.acct_nbr = ? AND a.acct_nbr = ? AND a.cycle_cd = ? 
+		  AND (a.data_vencimento_pagto &gt;= to_date(?, 'yyyymmdd')
+		  AND a.data_vencimento_pagto &lt;= to_date(?, 'yyyymmdd'))
+		</sql:query>
+				<sql:param index="1" type="String" />	
+				<sql:param index="2" type="String" />				
+				<sql:param index="3" type="String" />
+				<sql:param index="4" type="String" />
+				<sql:param index="5" type="String" />									
+    </sql:statement>
+							
+    <sql:statement name="SUBS">
+        <sql:query>
+					select count(*) from bck_consequence
+        </sql:query>
+    </sql:statement>		
+
+    <sql:statement name="R08_SubscriptionPlan">
+      <sql:query>
+		select a.svc_name from R08_Subscription_Plan a
+		where sbscrp_id = ?
+		and ((svc_agrmnt_trmntn_dt is null and to_date(SVC_AGRMNT_EFF_DT, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+		    or (svc_agrmnt_trmntn_dt is not null 
+		        and to_date(svc_agrmnt_trmntn_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+		        and to_date(svc_agrmnt_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')
+		       ) )
+		and ((svc_agrmnt_trmntn_dt is null and to_date(SVC_AGRMNT_EFF_DT, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+		    or (svc_agrmnt_trmntn_dt is not null 
+		        and to_date(svc_agrmnt_trmntn_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+		        and to_date(svc_agrmnt_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')
+		       ) )
+      </sql:query>
+		<sql:param index="1" type="String" />
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />
+		<sql:param index="5" type="String" />
+		<sql:param index="6" type="String" />
+		<sql:param index="7" type="String" />
+    </sql:statement>
+    
+    <sql:statement name="R08_AccountAndCycleChange">
+      <sql:query>
+			select to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') sbscrp_asgm_eff_dt, to_date(sbscrp_asgm_expr_dt, 'yyyymmdd') sbscrp_asgm_expr_dt,
+                   acct_nbr, cycle_cd, to_date(acct_cycle_eff_dt, 'yyyymmdd') acct_cycle_eff_dt, acct_cycle_eff_tm, sbscrp_id
+			from R08_AccountAndCycleChange
+			where sbscrp_id = ?
+			and ((sbscrp_asgm_expr_dt is null and to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+			    or (sbscrp_asgm_expr_dt is not null 
+			        and to_date(sbscrp_asgm_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+			        and to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')
+			       ) )
+      </sql:query>
+		<sql:param index="1" type="String" />
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />
+    </sql:statement>
+
+    <sql:statement name="R08_SubscriptionServices">
+      <sql:query>
+		SELECT a.acct_nbr, a.cycle_cd, a.sbscrp_id, a.captn_text, a.svc_name,
+		       to_date(nvl(a.sbscrp_asgm_eff_dt, '99991231'), 'yyyymmdd') sbscrp_asgm_eff_dt,
+		       to_date(nvl(a.SVC_AGRMNT_EFF_DT, '99991231'),'yyyymmdd') SVC_AGRMNT_EFF_DT,
+		       to_date(nvl(a.SVC_AGRMNT_TRMNTN_DT, '99991231'),'yyyymmdd') SVC_AGRMNT_TRMNTN_DT,
+		       to_date(nvl(a.SBSCRP_SVC_EFF_DT, '99991231'), 'yyyymmdd') SBSCRP_SVC_EFF_DT,
+		       to_date(nvl(a.SBSCRP_SVC_EXPR_DT, '99991231'),'yyyymmdd') SBSCRP_SVC_EXPR_DT
+		  FROM r08_subscription_services a
+		  WHERE ACCT_NBR = ? 
+		    AND CYCLE_CD = ? 
+		and ((svc_agrmnt_trmntn_dt is null and to_date(SVC_AGRMNT_EFF_DT, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+		    or (svc_agrmnt_trmntn_dt is not null
+		        and to_date(svc_agrmnt_trmntn_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+		        and to_date(svc_agrmnt_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')
+		       ) ) 
+		and ((sbscrp_asgm_expr_dt is null 
+		      and to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+		    or (sbscrp_asgm_expr_dt is not null
+		      and to_date(sbscrp_asgm_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+		      and to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')))	
+		and ((svc_price_expr_dt is null  
+		      and to_date(svc_price_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+		    or (svc_price_expr_dt is not null 
+		      and to_date(svc_price_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+		      and to_date(svc_price_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')))
+      </sql:query>
+		<sql:param index="1" type="String" />
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />
+		<sql:param index="5" type="String" />
+		<sql:param index="6" type="String" />
+		<sql:param index="7" type="String" />
+		<sql:param index="8" type="String" />
+		<sql:param index="9" type="String" />
+		<sql:param index="10" type="String" />
+		<sql:param index="11" type="String" />
+    </sql:statement>
+    
+    <sql:statement name="R13_ProgressiveDiscountPlans">
+      <sql:query>
+		
+		SELECT svc_price_seq_nbr
+		  FROM r13_progressive_discounts
+			  where svc_price_seq_nbr = ?
+				and ((dscnt_avail_end_dt is null and to_date(dscnt_avail_start_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+				    or (dscnt_avail_end_dt is not null 
+				        and to_date(dscnt_avail_end_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+				        and to_date(dscnt_avail_start_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')
+				       ) )
+		  				
+      </sql:query>
+		<sql:param index="1" type="String" />
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />
+    </sql:statement>
+
+
+    <sql:statement name="R20_BlockedSubscription"> <!-- Subcricoes bloqueadas -->
+        <sql:query>
+				SELECT a.sbscrp_id, a.sbscrp_access_line_seq_nbr
+  					FROM r20_blockedsubscription a
+             WHERE sbscrp_id = ?
+        </sql:query>
+			<sql:param index="1" type="String" />				
+    </sql:statement>	
+    
+    <sql:statement name="R20_AccHirch"> <!-- Conta de Hierarquia -->
+        <sql:query>
+        	select distinct acct_hirch_id
+        	from R20_AccHirch
+        	where acct_nbr=?
+        	and hirch_acct_asgm_eff_dt &lt;= ?
+        	and (hirch_acct_asgm_expr_dt is null or hirch_acct_asgm_expr_dt &gt;= ?)
+        </sql:query>
+        <sql:param index="1" type="String" />
+        <sql:param index="2" type="String" /> 		
+        <sql:param index="3" type="String" /> 		 				
+    </sql:statement> 
+
+    <sql:statement name="FullHierarchy"> <!-- Hierarchy Account functionality -->
+        <sql:query>
+			select acct_nbr
+			from R20_AccHirch
+			where acct_hirch_id=?
+			and hirch_acct_asgm_eff_dt &lt;= ?
+			and (hirch_acct_asgm_expr_dt is null or hirch_acct_asgm_expr_dt &gt;= ?)
+        </sql:query>
+        <sql:param index="1" type="String" />
+        <sql:param index="2" type="String" /> 		
+        <sql:param index="3" type="String" /> 		 				
+    </sql:statement>
+
+    <sql:statement name="R30_FavoriteList"> 
+        <sql:query>
+			SELECT a.sbscrp_origem, a.dt_eff_favorito DT_EFF_FAVORITO, nvl(a.dt_exp_favorito, '99991231') DT_EXP_FAVORITO,
+			       a.linha_destino, a.acct_nbr, a.cycle_cd, a.sbscrp_asgm_expr_dt,
+			       a.access_nbr_asgm_expr_dt
+			  FROM r30_favoritelist a
+			    where acct_nbr = ?
+			    and cycle_cd = ?
+			      and ((SBSCRP_ASGM_EXPR_DT is null and to_date(SBSCRP_ASGM_EFF_DT, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')) 
+			        or (SBSCRP_ASGM_EXPR_DT is not null 
+			        and to_date(SBSCRP_ASGM_EXPR_DT, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+			        and to_date(SBSCRP_ASGM_EFF_DT, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')
+			       ) ) 
+			      and ((access_nbr_asgm_expr_dt is null and to_date(access_nbr_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')) 
+			        or (access_nbr_asgm_expr_dt is not null 
+			        and to_date(access_nbr_asgm_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+			        and to_date(access_nbr_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')
+			       ) )
+    	</sql:query>
+		<sql:param index="1" type="String" />				
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />
+		<sql:param index="5" type="String" />				
+		<sql:param index="6" type="String" />
+		<sql:param index="7" type="String" />
+		<sql:param index="8" type="String" />
+    </sql:statement>	
+    
+        <sql:statement name="R30_ServiceListCode">
+        <sql:query>
+			select list_cd, list_desc 
+			from R30_SERVICELISTCODE
+			where svc_name = ?
+    	</sql:query>
+		<sql:param index="1" type="String" />				
+    </sql:statement>	
+
+    <sql:statement name="R31_IntraGroupType">
+        <sql:query>
+			SELECT svc_name, ATTR_GROUP_NAME 
+			FROM R31_IntraGroupType 
+			where svc_name = ?
+        </sql:query>
+		<sql:param index="1" type="String" />
+    </sql:statement>
+    
+     <sql:statement name="R31_IntraGroupAccount">
+        <sql:query>
+			SELECT a.acct_nbr, a.cust_id_text
+			  FROM r31_intragroupaccount a
+			  where  a.access_nbr = ? 
+        </sql:query>
+		<sql:param index="1" type="String" />
+    </sql:statement>
+    
+    <sql:statement name="R31_IntraGroupHirch">
+        <sql:query>
+		select ACCESS_NBR 
+			from R31_INTRAGROUPHIRCH
+			where PARENT_ACCT_NBR = ?
+		        and ((HIRCH_ACCT_ASGM_EXPR_DT  is null and to_date(HIRCH_ACCT_ASGM_EFF_DT, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+		        or (HIRCH_ACCT_ASGM_EXPR_DT  is not null 
+		        and to_date(HIRCH_ACCT_ASGM_EXPR_DT , 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+		        and to_date(HIRCH_ACCT_ASGM_EFF_DT, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')))
+		        and ACCESS_NBR = ?
+		        and ((HIRCH_ACCT_ASGM_EXPR_DT  is null and to_date(HIRCH_ACCT_ASGM_EFF_DT, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+			        or (HIRCH_ACCT_ASGM_EXPR_DT  is not null 
+			        and to_date(HIRCH_ACCT_ASGM_EXPR_DT , 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+			        and to_date(HIRCH_ACCT_ASGM_EFF_DT, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')))     						
+						and ((sbscrp_asgm_expr_dt is null and to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')) 
+		    		or (sbscrp_asgm_expr_dt is not null 
+		        and to_date(sbscrp_asgm_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+		        and to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')))
+						and ((HIRCH_ACCT_ASGM_EXPR_DT  is null and to_date(HIRCH_ACCT_ASGM_EFF_DT, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+		  		  or (HIRCH_ACCT_ASGM_EXPR_DT  is not null 
+		        and to_date(HIRCH_ACCT_ASGM_EXPR_DT , 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+		        and to_date(HIRCH_ACCT_ASGM_EFF_DT, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')))
+	        </sql:query>
+			<sql:param index="1" type="String" />			
+			<sql:param index="2" type="String" />	
+			<sql:param index="3" type="String" />	
+			<sql:param index="4" type="String" />	
+			<sql:param index="5" type="String" />		
+			<sql:param index="6" type="String" />	
+			<sql:param index="7" type="String" />	
+			<sql:param index="8" type="String" />	
+			<sql:param index="9" type="String" />	
+			<sql:param index="10" type="String" />	
+			<sql:param index="11" type="String" />	
+			<sql:param index="12" type="String" />
+			<sql:param index="13" type="String" />
+			<sql:param index="14" type="String" />			
+    </sql:statement>
+    
+    <sql:statement name="R32_PlanServices"> <!-- Indentificação se serviço é plano -->
+        <sql:query>
+				select access_nbr_rqr_flag
+					from R32_PLANSERVICE
+					where  svc_id = ?
+        </sql:query>
+			<sql:param index="1" type="String" />				
+    </sql:statement>	
+
+    <sql:statement name="R66_AccessNumberAutoPromotions"> <!-- Promocao em linha -->
+        <sql:query>
+SELECT sbscrp_id, captn_text, mktg_pgm_id, comm_svc_area_id, svc_agrmnt_trmntn_dt, svc_agrmnt_eff_dt,
+sbscrp_asgm_eff_dt, sbscrp_asgm_expr_dt
+FROM R66_AccessNumberAutoPromotions
+WHERE acct_nbr = ?
+and ((svc_agrmnt_trmntn_dt is null and to_date(SVC_AGRMNT_EFF_DT, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')) 
+    or (svc_agrmnt_trmntn_dt is not null 
+        and to_date(svc_agrmnt_trmntn_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+        and to_date(svc_agrmnt_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')
+       ) ) 
+and ((sbscrp_asgm_expr_dt is null  
+      and to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')) 
+    or (sbscrp_asgm_expr_dt is not null 
+      and to_date(sbscrp_asgm_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+      and to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')))
+	       </sql:query>
+			<sql:param index="1" type="String" />			
+			<sql:param index="2" type="String" />	
+			<sql:param index="3" type="String" />	
+			<sql:param index="4" type="String" />	
+			<sql:param index="5" type="String" />		
+			<sql:param index="6" type="String" />	
+			<sql:param index="7" type="String" />		
+    </sql:statement>	
+
+
+    <sql:statement name="R66_AccessNumberPromotions"> <!-- Promocao em linha -->
+        <sql:query>
+					SELECT a.mktg_pgm_id, a.sbscrp_id, a.captn_text, a.comm_svc_area_id,
+       a.mktg_pgm_enroll_dt
+  FROM r66_accessnumberpromotions a
+  where 'dummy' != ?
+				
+        </sql:query>
+			<sql:param index="1" type="String" />					
+    </sql:statement>	
+
+    <sql:statement name="R66_AccountPromotions"> <!-- Promocao em linha -->
+        <sql:query>
+SELECT a.mktg_pgm_id, a.mktg_pgm_desc, a.comm_svc_area_id,
+       a.mktg_pgm_enroll_start_dt
+  FROM r66_accountpromotions a
+  where 'dummy' != ?
+        </sql:query>
+			<sql:param index="1" type="String" />					
+    </sql:statement>	
+
+    <sql:statement name="R66_PromotionDetails"> <!-- -->
+        <sql:query>
+			SELECT a.mktg_pgm_id, a.begin_cycle_nbr, a.end_cycle_nbr, a.reward_amt,
+       a.comm_svc_area_id, a.auto_enroll_flag, a.appl_ind,
+       a.promo_level_ind, a.reward_type_cd
+  FROM r66_promotiondetails a
+  where mktg_pgm_id = ?
+    and comm_svc_area_id = ?
+
+        </sql:query>
+				<sql:param index="1" type="String" />					
+				<sql:param index="2" type="String" />				
+    </sql:statement>
+			
+    <sql:statement name="R66_AccessNumberUsedRewards"> <!-- Rewards by Account-->
+        <sql:query>
+SELECT a.acct_nbr, a.sbscrp_id, a.mktg_pgm_id, a.cycle_cd,
+       a.cycle_end_dt, a.reward_dollar_amt
+  FROM r66_accessnumberusedrewards a
+WHERE MKTG_PGM_ID = ? 
+AND SBSCRP_ID = ? 
+AND TO_DATE(CYCLE_END_DT, 'YYYYMMDD') &gt;= TO_DATE(?,'YYYYMMDD')
+
+        </sql:query>
+				<sql:param index="1" type="String" />
+				<sql:param index="2" type="String" />
+				<sql:param index="3" type="String" />
+    </sql:statement>
+    
+        <sql:statement name="R66_AccountUsedRewards"> <!-- Rewards by Account-->
+        <sql:query>
+          SELECT a.acct_nbr, a.mktg_pgm_id, a.cycle_cd, a.cycle_end_dt,
+                 a.reward_dollar_amt
+            FROM r66_accountusedrewards a
+          WHERE MKTG_PGM_ID = ? 
+          AND acct_nbr = ? 
+          AND TO_DATE(CYCLE_END_DT, 'YYYYMMDD') &gt;= TO_DATE(?,'YYYYMMDD')
+        </sql:query>
+				<sql:param index="1" type="String" />
+				<sql:param index="2" type="String" />
+				<sql:param index="3" type="String" />
+    </sql:statement>
+
+    <sql:statement name="R66_PromotionCriteria"> 
+        <sql:query>
+    			SELECT a.mktg_pgm_id, a.captn_text, a.crtra_and_or_ind,
+    			       a.comm_svc_area_id
+    			  FROM r66_promotionscriteria a, dual
+    			  where mktg_pgm_id = ?
+    			        and comm_svc_area_id = ?
+    			        and 'dummy' != ?
+    			        and 'dummy' != ?
+    			        and 'dummy' != ? 
+        </sql:query>
+			<sql:param index="1" type="String" />					
+			<sql:param index="2" type="String" />		
+			<sql:param index="3" type="String" />	
+			<sql:param index="4" type="String" />	
+			<sql:param index="5" type="String" />			
+    </sql:statement>
+
+    <sql:statement name="ProgressiveDiscount1"> <!-- MKT Program Existe???-->
+        <sql:query>
+select  mktg_pgm_id, svc_name, captn_text, tier_min_amt, tier_max_amt, reward_amt
+from R20_MKT
+where svc_name = ?
+        </sql:query>
+				<sql:param index="1" type="String" />									
+    </sql:statement>	
+
+    <sql:statement name="DataBarnRerateFlag"> 
+        <sql:query>
+		select svc_price_seq_nbr, rerate_incol_flag, svc_price_eff_dt, svc_price_expr_dt
+		from svc_price
+		where svc_price_seq_nbr = ?
+		and ? between svc_price_eff_dt and svc_price_expr_dt
+        </sql:query>
+		<sql:param index="1" type="String" />				
+		<sql:param index="2" type="String" />				
+    </sql:statement>	
+			
+    <sql:statement name="DataBarnSubscription1"> 
+        <sql:query>
+		SELECT sbscrp_id, expr_dt, eff_dt
+		  FROM r40_databarnsubscription1
+			where 'dummy' != ?
+					and ((expr_dt is null 
+					    and to_date(eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+					  or (expr_dt is not null 
+					    and to_date(expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')))
+					and ((expr_dt is null  
+      					and to_date(eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')) 
+   					  or (expr_dt is not null 
+    					and to_date(expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')))
+      </sql:query>
+		<sql:param index="1" type="String" />
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />
+		<sql:param index="5" type="String" />
+    </sql:statement>
+
+    <sql:statement name="DataBarnSubscription2"> 
+        <sql:query>
+
+SELECT acct_nbr, sbscrp_asgm_eff_dt, sbscrp_asgm_expr_dt
+  FROM r40_databarnsubscription2
+  where 'dummy' != ?
+and ((sbscrp_asgm_expr_dt is null  
+    and to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')) 
+  or (sbscrp_asgm_expr_dt is not null 
+    and to_date(sbscrp_asgm_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+    and to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')))
+
+        </sql:query>
+		<sql:param index="1" type="String" />
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />
+    </sql:statement>
+    
+    <sql:statement name="DataBarnSubscription3"> 
+        <sql:query>
+		SELECT cycle_cd, acct_cycle_eff_dt
+		  FROM r40_databarnsubscription3
+		  where 'dummy' != ?
+        </sql:query>
+		<sql:param index="1" type="String" />
+    </sql:statement>
+    
+    <sql:statement name="DirectDebitInfo"> 
+        <sql:query>
+select p.acct_nbr conta,
+       p.bank_acct_nbr conta_corrente       
+from r52_pymtmethod p
+where acct_nbr = ?
+and  ( (pymt_method_expr_dt is null 
+        and to_date(pymt_method_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+    or (pymt_method_expr_dt is not null 
+        and to_date(pymt_method_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+        and to_date(pymt_method_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')
+     ) )
+        </sql:query>
+		<sql:param index="1" type="String" />
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />
+    </sql:statement>
+    
+    <sql:statement name="ClientGeneralInfo"> 
+        <sql:query>
+select distinct nvl(e.bus_name,e.first_name ||' '|| e.middle_name ||' '|| e.last_name),        
+               i.street_name || ', ' || i.house_nbr,
+               i.delvry_1_text || ' ' || i.delvry_2_text, 
+               i.county_name,
+               i.postal_cd || '-' || i.postal_plus_cd || '  ' || i.city_name || ' - ' || i.state_cd,
+               d.cust_idntfc_type_cd,               
+               d.cust_id_text
+from r52_sbscrp_asgm b,
+    r52_cust_acct c,
+    r52_cust_idntfc d,
+    r52_cust e,
+    r52_cust_addr i
+where b.acct_nbr = c.acct_nbr
+    and c.cust_id = d.cust_id
+    and d.cust_id = e.cust_id
+    AND (D.cust_idntfc_type_cd LIKE '%CPF%' OR D.cust_idntfc_type_cd LIKE '%CNPJ%')
+    and e.cust_id = i.cust_id
+    and c.cust_id = e.cust_id
+    and c.mlng_addr_seq_nbr = i.addr_seq_nbr
+    AND b.acct_nbr =?
+    and ((addr_expr_dt is null and to_date(addr_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')) 
+        or (addr_expr_dt is not null 
+        and to_date(addr_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+        and to_date(addr_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')
+       ) )
+    and  ( (sbscrp_asgm_expr_dt is null 
+        and to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+        or (sbscrp_asgm_expr_dt is not null 
+            and to_date(sbscrp_asgm_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+            and to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')
+     ) )
+        </sql:query>
+		<sql:param index="1" type="String" />
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />
+		<sql:param index="5" type="String" />
+		<sql:param index="6" type="String" />
+		<sql:param index="7" type="String" />		
+    </sql:statement>    
+        
+    <!-- R73 -->
+    <sql:statement name="ServicesByPlan"> 
+        <sql:query>
+			select distinct member_svc_name
+			from r73_package_services
+			where svc_price_seq_nbr_plan = ?
+		    and ((svc_price_expr_dt is null and to_date(svc_price_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+		        or (svc_price_expr_dt is not null 
+		            and to_date(svc_price_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+		            and to_date(svc_price_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')))
+        </sql:query>
+		<sql:param index="1" type="String" />
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />		
+    </sql:statement>  
+        
+    <!-- R73 -->
+    <sql:statement name="ServicesByAccount"> 
+        <sql:query>
+			SELECT DISTINCT	ACCT_NBR, CYCLE_CD, SBSCRP_ID,  svc_name, svc_agrmnt_trmntn_dt, svc_agrmnt_eff_dt
+			FROM R73_SUBSCRIPTION_SERVICES
+			WHERE ACCT_NBR = ? 
+			AND CYCLE_CD = ?
+            and ((svc_agrmnt_trmntn_dt is null and to_date(SVC_AGRMNT_EFF_DT, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+                or (svc_agrmnt_trmntn_dt is not null 
+                    and to_date(svc_agrmnt_trmntn_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+                    and to_date(svc_agrmnt_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))) 
+            and ((sbscrp_asgm_expr_dt is null and to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')) 
+                 or (sbscrp_asgm_expr_dt is not null 
+                    and to_date(sbscrp_asgm_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+                    and to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))) 
+        </sql:query>
+		<sql:param index="1" type="String" />	
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />
+		<sql:param index="5" type="String" />	
+		<sql:param index="6" type="String" />	
+		<sql:param index="7" type="String" />		
+		<sql:param index="8" type="String" />							
+    </sql:statement>
+        
+    <sql:statement name="R53_TechSubscription"> 
+        <sql:query>
+			SELECT chnl_type_ind
+				FROM r53_technology_subscription 
+					WHERE sbscrp_id= ? 
+      	</sql:query>		
+		<sql:param index="1" type="String" />
+    </sql:statement>    
+        
+    <sql:statement name="R53_TechService"> 
+        <sql:query>
+		SELECT DISTINCT chnl_type_ind, trim(CAPTN_TEXT) as CAPTN_TEXT
+		  FROM r53_technology_service
+      </sql:query>
+
+    </sql:statement>
+    
+    <sql:statement name="R55_NegotProd">
+      <sql:query>
+      	<!-- Pra efeito de teste de consulta com ?, coloquei sbscrp_id e svc_name na tabela -->
+		<!-- &gt;= equivalente a "maior ou igual" -->
+		<!-- &lt;= equivalente a "menor ou igual" 
+			 Ainda na query abaixo, colocado distinct no retorno para pegar somente um valor, pois na tabela teste teria 
+			 mais de um retorno para a coluna svc_name, dando erro, o que na vivo não. Por isso na query da Vivo em homl
+			 e prod, essa fç não existe.
+		-->		
+		SELECT svc_name, negot_eff_dt,  
+     		   NVL(negot_expr_dt,TO_CHAR((SYSDATE+999), 'yyyymmdd')) AS negot_expr_dt, svc_price_seq_nbr 
+ 		FROM   R55_negotiable_products 
+ 		WHERE  svc_name=(select distinct svc_name from R55_negotiable_products where svc_price_seq_nbr=?)
+ 		  AND  sbscrp_id=? 
+ 		  AND  (TO_DATE(negot_expr_dt,'yyyymmdd') &gt;= TO_DATE(?,'yyyymmdd') OR negot_expr_dt is null)  
+ 		  AND   TO_DATE(negot_eff_dt, 'yyyymmdd') &lt;= TO_DATE(?,'yyyymmdd')
+ 		ORDER BY svc_price_seq_nbr, negot_eff_dt
+ 				
+      </sql:query>
+		<sql:param index="1" type="String" />
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />
+    </sql:statement>
+
+	<sql:statement name="R63_ProductRelationDTBN">
+		<sql:query>
+			SELECT service1, service2, relation
+			FROM R63_SVC_USE_RULE
+		</sql:query>
+	</sql:statement>
+
+	<sql:statement name="R69_CityByZipCode">
+		<sql:query>
+			SELECT num_cep cep, dsc_localidade cidade
+			FROM r69_localidade_cep
+			WHERE num_cep = ?
+		</sql:query>
+		<sql:param index="1" type="String" />
+	</sql:statement>
+
+   	<sql:statement name="R74_SharingServ">
+      	<sql:query>
+      	
+      	SELECT DISTINCT sbscrp_id, captn_text, svc_name, leader_sbscrp_id,
+  						free_usage_across_acct_ind,	usage_acum_seq_nbr, 
+  						access_nbr_rqr_flag, comm_svc_area_id
+		FROM R74_Sharing_Service
+		WHERE acct_nbr = ?
+		AND   cycle_cd = ?
+		AND   charge_type_cd = 'F'
+		AND (
+      			( svc_agrmnt_trmntn_dt is null 
+        		  AND to_date(svc_agrmnt_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd') 
+       			) 
+      		 OR (
+          		 svc_agrmnt_trmntn_dt is not null 
+          		 AND to_date(svc_agrmnt_trmntn_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd') 
+          		 AND to_date(svc_agrmnt_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')    
+         		)
+    		)
+		AND (
+      			( sbscrp_asgm_expr_dt is null
+        		 AND to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd') 
+      			)
+      			OR (
+          			sbscrp_asgm_expr_dt is not null
+          			AND to_date(sbscrp_asgm_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd') 
+          			AND to_date(sbscrp_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')  
+         		)
+		) 
+    </sql:query>
+		<sql:param index="1" type="String" />
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />
+		<sql:param index="5" type="String" />
+		<sql:param index="6" type="String" />
+		<sql:param index="7" type="String" />
+		<sql:param index="8" type="String" />
+    </sql:statement>
+    
+    <sql:statement name="R74_SharingPlan">
+      	<sql:query>
+      	select distinct svc_name
+		from R74_sharing_plan
+		where usage_acum_seq_nbr = ?
+		and access_nbr_rqr_flag = 'Y'
+		and comm_svc_area_id = ?
+		and ((svc_price_expr_dt is null  
+      		  	and to_date(svc_price_eff_dt, 'yyyymmdd')  &lt;= to_date(?,'yyyymmdd')) -- corte
+    		  or (svc_price_expr_dt is not null 
+      		  	and to_date(svc_price_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')  -- inicio
+      		  	and to_date(svc_price_eff_dt , 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')) -- corte
+      	)       		
+    	</sql:query>    	
+		<sql:param index="1" type="String" />
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />
+		<sql:param index="5" type="String" />
+    </sql:statement>  	
+    
+     <sql:statement name="R78_AccHirch">
+        <sql:query>
+			SELECT acct_nbr, parent_acct, acct_hirch_id,
+			       hirch_acct_asgm_eff_dt, hirch_acct_asgm_expr_dt
+			FROM r78_acctypeandhirch
+			WHERE acct_nbr = ?
+					and ((hirch_acct_asgm_expr_dt is null  
+			      and to_date(hirch_acct_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd'))
+			    or (hirch_acct_asgm_expr_dt is not null 
+			    and to_date(hirch_acct_asgm_expr_dt, 'yyyymmdd') &gt;= to_date(?,'yyyymmdd')
+			    and to_date(hirch_acct_asgm_eff_dt, 'yyyymmdd') &lt;= to_date(?,'yyyymmdd')))
+      </sql:query>
+		<sql:param index="1" type="String" />
+		<sql:param index="2" type="String" />
+		<sql:param index="3" type="String" />
+		<sql:param index="4" type="String" />
+    </sql:statement>
+    
+    <sql:statement name="R78_AccType">
+        <sql:query>
+			select acct_nbr, acct_type_cd
+			from R78_ACCTYPE
+			where acct_nbr = ?
+      </sql:query>
+		<sql:param index="1" type="String" />
+    </sql:statement>
+  
+    </sql:statements>
+  </sql:configuration>
+</root>

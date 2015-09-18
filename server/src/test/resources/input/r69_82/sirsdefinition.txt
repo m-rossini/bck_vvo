@@ -1,0 +1,11 @@
+			<sdd:key start-key="265T" name="MULTAS_JUROS_TOTAL" label="Multas e Juros">
+				<sdd:attribute name="Amount" start="155" size="14" />
+				<sdd:key start-key="265D" name="MULTAS_JUROS_DETAIL">
+					<sdd:attribute name="CarrierID" start="65" size="02" />
+					<sdd:attribute name="CarrierState" start="67" size="02" />
+					<sdd:attribute name="Amount" start="127" size="14" />
+					<sdd:attribute name="Descricao" start="155" size="50" />
+					<sdd:attribute name="ItemNo" start="205" size="04" />
+					<sdd:attribute name="DataElemento" start="275" size="08" />
+				</sdd:key>
+			</sdd:key>

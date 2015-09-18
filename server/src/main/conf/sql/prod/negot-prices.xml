@@ -1,0 +1,38 @@
+<?xml version = "1.0" encoding = "UTF-8"?>
+<root>
+	<sql:configuration xmlns:sql="http://www.auster.com.br/common/sql/">
+		<sql:statements>
+
+		<sql:statement name="USAGE_NEGOT_PRICE">
+			<sql:query>
+				select 
+				a.sbscrp_id sbscrp_id, a.acct_nbr acct_nbr, 
+				b.svc_price_seq_nbr svc_price_seq_nbr, c.svc_name svc_name,
+				0 OBJID,  c.charge_type_cd CHARGE_TYPE,
+				to_date(b.negot_eff_dt, 'yyyy-mm-dd') EFFECTIVE_DATE, 
+				to_date(b.negot_expr_dt, 'yyyy-mm-dd') EXPIRATION_DATE,
+				b.svc_price_seq_nbr SCENARIO_ID, 0  FREE_UNITS_ID,
+				b.negot_init_charge_amt  INITIAL_UNIT_VALUE,
+				0 INITIAL_UNIT_QTY, c.init_period_unit_cd INITIAL_UNIT_TYPE,
+				c.init_incl_unit_amt INITIAL_UNIT_INCL_QTY,  b.negot_adtnl_charge_amt STEP_UNIT_VALUE,
+				0 STEP_UNIT_QTY, c.adtnl_period_unit_cd STEP_UNIT_TYPE,
+				c.adtnl_incl_unit_amt STEP_UNIT_INCL_QTY,
+				'Y' as NEGOTIABLE_FLAG, 'N' as PASSTHROUGH_FLAG,
+				c.comm_svc_area_id  SP_AREA_ID,
+				c.tax_cat_cd TAX_CODE, sysdate as updated_date,
+				'' as CUSTOM_1, '' as CUSTOM_2, '' as CUSTOM_3,
+				negot_pct,  negot_type_cd,  negot_tax_incl_flag, '' as charge_type_id 
+				from sbscrp_asgm a, negot_price b, svc_price c
+				where
+				a.sbscrp_id = b.sbscrp_id and
+				c.svc_price_seq_nbr = b.svc_price_seq_nbr and
+				c.charge_type_cd in ('U','R') and
+				negot_type_cd is not null and
+				a.acct_nbr = ?
+			</sql:query>
+			<sql:param index="1" type="String" />						
+		</sql:statement>
+
+		</sql:statements>
+	</sql:configuration>
+</root>

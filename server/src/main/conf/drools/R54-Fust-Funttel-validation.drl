@@ -1,0 +1,113 @@
+#created on: 03/01/2008
+#author anardo
+
+package br.com.auster.rules.vivo.R54
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Receipt;
+import br.com.auster.om.invoice.ChargedTax;
+import br.com.auster.common.lang.NumberUtils;
+import java.lang.Math;
+import java.lang.Double;
+
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+
+function double calculate(double NFtotal, double ICMStotal, double taxa){
+	
+	double result = (NFtotal-ICMStotal-(NFtotal*0.0365))*taxa;
+	double resultTrunc = NumberUtils.truncate(result,2); //retorna double, truncando em 2 casas decimais
+
+	return resultTrunc;	
+}
+
+function TelcoConsequence buildR54Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 				 String carrier, String ruleNbr, String desc, Double valueFustSirs, Double valueFustCalculate,
+		 				 Double valueFunttelSirs, Double valueFunttelCalculate, double nfTotal, double icmsTotal, 
+		 				 String carrierName, String carrierState, String carrierCode) {
+		
+		//setando parâmetros padrões para a consequência
+		consequenceBuilder.setRule(ruleNbr, "Validação do FUST e FUNTTEL"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(carrier));
+		
+		//definindo os atributos que serão gerados na crítica
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription(desc);
+		//atributos para ambas sub-regras
+		c.addAttribute("Nome Operadora", carrierName);
+		c.addAttribute("Código Operadora", carrierCode);
+		c.addAttribute("Nome Estado", carrierState);
+		c.addAttribute("NF Total", ValueFormat.formatValue(nfTotal));
+		c.addAttribute("ICMS Total", ValueFormat.formatValue(icmsTotal));				
+		//atributos para R54-1
+		c.addAttribute("Valor FUST Sirs", ValueFormat.formatValue(valueFustSirs));	
+		c.addAttribute("Valor FUST Calculo", ValueFormat.formatValue(valueFustCalculate));
+		//atributos para R54-2
+		c.addAttribute("Valor FUNTTEL Sirs", ValueFormat.formatValue(valueFunttelSirs));
+		c.addAttribute("Valor FUNTTEL Calculo", ValueFormat.formatValue(valueFunttelCalculate));		
+  		
+  		return c;
+}
+
+rule "R54-1 Fust"
+salience 0	
+	when
+		Account($accountCarrierCode 	: carrierCode) //uso padrão no carrierCode da consequencia
+		
+		$receipt : Receipt( $carrierName	  : carrierName,
+							$carrierState	  : carrierState,
+							$carrierCode	  :	carrierCode,
+							$NFTotalFust	  : totalInvoiceAmount 
+		)
+		
+		$d: ChargedTax( $taxName				   	   : taxName -> ($taxName.equals("FUST")),
+						$totalFUSTAmount    		   : taxAmount,	  		//em comum, com valores diferentes									
+						$fustTotalTaxesAmount		   : totalTaxesAmount   //em comum, com valores iguais - ICMS Total				
+		) from $receipt.taxes
+		
+		eval ( Math.abs( ( Math.abs(Math.round($totalFUSTAmount * 100)) - Math.abs(Math.round(calculate($NFTotalFust,$fustTotalTaxesAmount,0.01d)* 100))) ) > 1.0 )	
+	then
+		results.add(buildR54Consequence(dimensionCache,consequenceBuilder,$accountCarrierCode,"R54-1", "Valor Fust inválido",
+        								$totalFUSTAmount, calculate($NFTotalFust,$fustTotalTaxesAmount,0.01d), null, null,
+        								$NFTotalFust,$fustTotalTaxesAmount,$carrierName, $carrierState, $carrierCode));		
+end
+
+rule "R54-2 Funttel"
+salience 0
+	when
+		Account($accountCarrierCode 	: carrierCode) 
+		
+		$receipt : Receipt( $carrierName	  : carrierName,
+							$carrierState	  : carrierState,
+							$carrierCode	  :	carrierCode,
+							$NFTotalFunt	  : totalInvoiceAmount 
+						  )
+			
+		ChargedTax( $taxName					   : taxName 	-> ($taxName.equals("FUNTTEL")),
+					$totalFUNTTELAmount 		   : taxAmount,	    //Valor Funttel									
+					$funttelTotalTaxesAmount	   : totalTaxesAmount  //ICMS Total  
+		) from $receipt.taxes
+		
+		eval ( Math.abs( Math.abs(Math.round($totalFUNTTELAmount * 100)) - Math.abs(Math.round(calculate($NFTotalFunt,$funttelTotalTaxesAmount,0.005d)* 100)) ) > 1.0 )		
+	then		
+		results.add(buildR54Consequence(dimensionCache,consequenceBuilder,$accountCarrierCode,"R54-2", "Valor Funttel inválido",
+        								null, null,$totalFUNTTELAmount, calculate($NFTotalFunt,$funttelTotalTaxesAmount,0.005d),
+        								$NFTotalFunt,$funttelTotalTaxesAmount,$carrierName, $carrierState, $carrierCode));		
+end
+

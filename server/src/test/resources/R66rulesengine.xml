@@ -1,0 +1,55 @@
+<config>
+	<input-list-tag name="invoice-om" />
+	<results-map-tag name="consequence-list" />
+	<assertionEngine
+		class-name="br.com.auster.billcheckout.rules.assertion.XPathContextAssertionEngine"
+		xpath-file="src/main/conf/asr1/context-om-objects.xml" />
+
+	<rules-engine
+		class-name="br.com.auster.billcheckout.rules.Drools4DirectoriesRulesEngineProcessor">
+		<listeners
+			memoryListenerClass="br.com.auster.billcheckout.rules.listeners.StandardSessionListener"
+			agendaListenerClass="br.com.auster.billcheckout.rules.listeners.StandardAgendaListener"
+			flowListenerClass="br.com.auster.billcheckout.rules.listeners.StandardFlowListener"
+			agentListenerClass="br.com.auster.billcheckout.rules.listeners.StandardAgentListener" />
+
+		<RuleBaseConfig
+			propertiesFile="src/main/conf/asr1/rulebasebusiness.properties" />
+		<RuleAgentConfig
+			propertiesFile="src/main/conf/asr1/ruleagent.properties" />
+		<PackageBuilderConfig
+			propertiesFile="src/main/conf/asr1/packagebuilder.properties" />
+
+		<RulePackages>
+			<RulePackage name="PackageINITrules" base="src/main/conf/drools" drlMask="INIT*.drl" />
+			<RulePackage name="PackageR66" base="src/main/conf/drools" 	drlMask="R66-promotions-checking.drl" />
+		</RulePackages>
+	</rules-engine>
+
+
+	<globals-list>
+		<global name="dimensionCache"
+			class-name="br.com.auster.vivo.billcheckout.util.DimensionCache">
+		</global>
+
+		<global name="consequenceBuilder"
+			class-name="br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder">
+		</global>
+
+		<global name="marketingPromotionsServices"
+			class-name="br.com.auster.vivo.billcheckout.cache.MarketingPromotionsServices"
+			config-file="">
+			<database pool-name="sql/tiamatdb">
+				<statement-names>
+					<stament-name name="R66_AccessNumberPromotions" />
+					<stament-name name="R66_AccountPromotions" />
+					<stament-name name="R66_PromotionDetails" />
+					<stament-name name="R66_AccessNumberUsedRewards" />
+					<stament-name name="R66_AccountUsedRewards" />
+				</statement-names>
+			</database>
+		</global>
+
+	</globals-list>
+
+</config>

@@ -1,0 +1,18 @@
+<?xml version="1.0" ?>
+<report-configuration name="ConsequencesSummaryByService">
+   <report-query>
+      select external_id, account_state, cycle_code, cycle_end, service_name, 
+             sum(event_count) as event_count, sum(error_count) as error_count
+        from bck_checked_services
+       where external_id=$P{PARAM_REQUEST_ID}
+         and account_state=$P{PARAM_ACCT_STATE}
+       group by external_id, account_state, cycle_code, cycle_end, service_name
+       order by external_id, account_state, cycle_code, cycle_end, error_count desc, service_name   
+   </report-query>
+   <images>
+       <image name="APPLICATION_LOGO" path="jasper/img/bc_logo.png"/>
+       <image name="COMPANY_LOGO"     path="jasper/img/auster_logo.png"/>
+       <image name="CUSTOMER_LOGO"    path="jasper/img/vivo_logo.png"/>
+   </images>
+   <virtualizer enabled="true" threshold="5000"/>
+</report-configuration>

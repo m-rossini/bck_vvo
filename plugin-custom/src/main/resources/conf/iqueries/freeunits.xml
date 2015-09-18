@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<view display-name="Franquia" datasource="ds2">
+	<columns>
+		<column name="uid"
+			table="prc_service"		type="long"			
+			visible="false"/>
+		<column name="uid"
+			table="prc_service_free_units"	type="long"			
+			visible="false"/>
+		<column name="free_units_id"
+			table="prc_service_price"	type="long"			
+			visible="false"/>
+		<column name="service_id"
+			table="prc_service_price"      	type="long"			
+			visible="false"/>
+		<column name="service_name"            	display-name="Serviço"
+			table="prc_service"		type="varchar"			
+			visible="true"/>
+		<column name="service_description"      display-name="Descrição do Serviço" 	
+			table="prc_service" 		type="varchar"		
+			visible="true"/>
+		<column name="sp_area_id" 		display-name="CSA" 	
+			table="prc_service_price" 	type="varchar"		
+			visible="true"/>						
+		<column name="effective_date" 		display-name="Data de Efetivação" 	
+			table="prc_service_price" 	type="datetime"		
+			visible="true"/>						
+		<column name="expiration_date" 		display-name="Data de Expiração" 	
+			table="prc_service_price" 	type="datetime"		
+			visible="true"/>						
+		<column name="scenario_id" 		display-name="Svc.Price Seq.Nbr" 	
+			table="prc_service_price" 	type="varchar"		
+			visible="true"/>						
+		<column name="charge_type" 		display-name="Tipo de Cobrança" 	
+			table="prc_service_price" 	type="varchar"		
+			visible="true"/>						
+		<column name="free_units_type"		display-name="Unidade" 	
+			table="prc_service_free_units" 	type="varchar"		
+			visible="true"/>						
+		<column name="free_units_qty"		display-name="Qtde. Incluída" 	
+			table="prc_service_free_units" 	type="double"		
+			visible="true"/>						
+		<column name="custom_1"			display-name="Usage Accum. Seq.Nbr" 	
+			table="prc_service_free_units" 	type="varchar"		
+			visible="true"/>	
+		<column name="free_units_share_mode"   	display-name="Modo de Compartilhamento" 	
+			table="prc_service_free_units" 	type="char"		
+			visible="true"/>						
+	</columns>
+	<relations>
+		<relation from-table="prc_service" 			
+				  from-column="uid" 
+				  to-table="prc_service_price" 	
+				  to-column="service_id"/>
+		<relation from-table="prc_service_free_units" 			
+				  from-column="uid" 
+				  to-table="prc_service_price" 	
+				  to-column="free_units_id"/>
+	</relations>
+</view>
+

@@ -1,0 +1,21 @@
+<?xml version='1.0' encoding='utf-8'?>
+
+<hibernate-configuration>
+    <session-factory>
+        <property name="show_sql">false</property>
+        <property name="use_outer_join">true</property>
+		<property name="cglib.use_reflection_optimizer">false</property>
+
+		<property name="connection.driver_class">org.apache.commons.dbcp.PoolingDriver</property>
+		<property name="connection.url">jdbc:apache:commons:dbcp:/sql/billcheckoutdb</property>
+
+        <property name="dialect">org.hibernate.dialect.Oracle9Dialect</property>
+
+        <mapping resource="br/com/auster/om/reference/ImportRecord.hbm.xml"/>
+		    <mapping resource="br/com/auster/om/pricing/Service.hbm.xml"/>
+        <mapping resource="br/com/auster/om/pricing/ServicePrice.hbm.xml"/>
+        <mapping resource="br/com/auster/om/pricing/TaxCategory.hbm.xml"/>
+        <mapping resource="br/com/auster/om/pricing/TaxRate.hbm.xml"/>
+        <mapping resource="br/com/auster/om/pricing/ServiceFreeUnits.hbm.xml"/>
+    </session-factory>
+</hibernate-configuration>

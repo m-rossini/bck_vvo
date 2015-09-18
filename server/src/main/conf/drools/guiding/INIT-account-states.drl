@@ -1,0 +1,42 @@
+#package br.com.auster.rules.vivo;
+
+import java.util.Iterator;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.SectionDetail;
+import br.com.auster.om.invoice.UsageDetail;
+
+global java.util.List results;
+
+/**
+ */
+rule "INIT-FindAccountState" 
+	salience 98
+	when	
+		$acct : Account(customerServiceArea == "ENT61" , accountStateModified != true)
+	then
+		$acct.setChangedAccountState("GO");
+		$acct.setAccountStateModified(true);
+		
+		#Now we are gonna do the same for all Sections, and its children.
+		#Remember that Section are not inserted on Guidind
+		Invoice invoice = $acct.getInvoice();
+		Iterator it;
+		for (it=invoice.getSections().iterator(); it.hasNext();) {
+			Section section = (Section) it.next();
+			if ((section.getSubscriptionState() != null) && 
+				section.getSubscriptionState().equals("GF")) {
+					section.setSubscriptionState("GO");
+			}
+		}
+end 
+
+
+rule "INIT-UsageState" 
+	salience 98
+	when	
+		$usage : UsageDetail(carrierState=="GF")
+	then
+		$usage.setCarrierState("GO");
+end 

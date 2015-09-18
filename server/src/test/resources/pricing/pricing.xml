@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<configuration name="priceEngine"
+        class-name="br.com.auster.vivo.billcheckout.pricing.SQLPricingFacadeImpl"
+        pool-name="sql/tiamatdb"
+		skip-negotiables="false"
+		cache-size="20"
+		notfoundset-size="2">
+	
+	<negotiable-datasource 
+			pool-name="sql/tiamatdb"
+			price-statement="USAGE_NEGOT_PRICE"
+			subscription-statement="NONE"/>
+	
+</configuration>

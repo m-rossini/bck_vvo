@@ -1,0 +1,28 @@
+﻿<?xml version = "1.0" encoding = "UTF-8"?>
+
+
+<!--
+	Attributes for Invoice Image Generator are:
+		* queue-size: number of transformations allowed to run in parallel
+		* ant-file: ANT file to run when a new transformation is requested
+		* jndi-properties: JNDI connection properties to attach to JMS incoming queue
+		* queue-factory: JMS Queue Factory JNDI name for connecting to JMS Queue
+		* queue-name: JMS Queue Name from where to receive transformation requests
+ -->
+<configuration
+	queue-size="2"
+	ant-file="bin/isc-image.xml"
+	jndi-properties="conf/jms/jms-config.properties"
+	queue-factory="billcheckout.QueueConnectionFactory"
+	queue-name="queue/buildInvoiceImage"
+	pool-name="sql/billcheckoutdb">
+
+	<sql:configuration
+		xmlns:sql="http://www.auster.com.br/common/sql/">
+		<sql:database name="sql/billcheckoutdb">
+			<sql:statements path="conf/sql/image-sql.xml" />
+		</sql:database>
+	</sql:configuration>
+
+
+</configuration>

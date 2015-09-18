@@ -1,0 +1,29 @@
+package br.com.auster.rules.vivo.init;
+
+import java.util.Iterator;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.SectionDetail;
+import br.com.auster.om.invoice.UsageDetail;
+
+global java.util.List results;
+
+/**
+ */
+rule "INIT-FindAccountState2" 
+	salience 98
+	when	
+		$acct : Account(customerServiceArea == "ENT61" , accountStateModified != true)
+	then
+		String state = "GO";
+		$acct.setChangedAccountState(state);
+		$acct.setAccountStateModified(true);
+		Invoice invoice = $acct.getInvoice();
+		Iterator it;
+		for (it=invoice.getSections().iterator(); it.hasNext();) {
+			Section section = (Section) it.next();
+			section.setSubscriptionState(state);
+		}
+end 
+

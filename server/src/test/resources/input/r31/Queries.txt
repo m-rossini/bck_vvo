@@ -1,0 +1,66 @@
+			select list_cd, list_desc 
+			from value_list a, callng_circle_type b, svc c
+			where a.LIST_CD = b.CALLNG_CIRCLE_METHOD_IND
+				and b.CALLNG_CIRCLE_TYPE_IND = c.CALLNG_CIRCLE_TYPE_IND
+				and a.table_name = 'CALL LIST CATEGORY'  
+				and c.svc_name = 'INTRAREDEANTHIER';
+
+
+			SELECT svc_name, ATTR_GROUP_NAME 
+			FROM SVC 
+			where svc_name = 'INTRAREDEANTHIER';
+			
+			
+			select b.acct_nbr, a.cust_id_text
+			from cust_idntfc a, cust_acct b, sbscrp_asgm s, access_line_nbr_asgm l
+			where  a.cust_id = b.cust_id
+			and l.sbscrp_id = s.sbscrp_id
+			and b.acct_nbr = s.acct_nbr
+			and a.cust_idntfc_type_cd like '%CNPJ%'
+			and l.access_nbr = '6196450515' 
+			and l.access_nbr_asgm_expr_dt is null
+			and s.sbscrp_asgm_expr_dt is null;
+			
+			select sb.ACCESS_NBR 
+			from sbscrp_asgm sa, sbscrp sb, HIRCH_ACCT_ASGM hr 
+			where sa.sbscrp_id = sb.sbscrp_id 
+			and sa.acct_nbr = hr.ACCT_NBR 
+			and hr.PARENT_ACCT_NBR = '0144672698';
+			and sb.ACCESS_NBR = '6599824475';
+			and ((sa.sbscrp_asgm_expr_dt is null  
+			and to_date(sa.sbscrp_asgm_eff_dt, 'yyyymmdd') <= to_date('20080420','yyyymmdd')) 
+			or (sa.sbscrp_asgm_expr_dt is not null and to_date(sa.sbscrp_asgm_expr_dt, 'yyyymmdd') >= to_date('20080519','yyyymmdd')))
+			and ((sb.SBSCRP_SVC_EXPR_DT is null  and to_date(sb.SBSCRP_SVC_EFF_DT, 'yyyymmdd') <= to_date('20080420','yyyymmdd')) 
+			or (sb.SBSCRP_SVC_EXPR_DT is not null and to_date(sb.SBSCRP_SVC_EXPR_DT, 'yyyymmdd') >= to_date('20080420','yyyymmdd'))) 
+			and 
+			((hr.HIRCH_ACCT_ASGM_EXPR_DT IS NULL) OR to_date(hr.HIRCH_ACCT_ASGM_EXPR_DT, 'yyyymmdd') >= to_date('20080519','yyyymmdd')) 
+			AND (to_date(hr.HIRCH_ACCT_ASGM_EFF_DT, 'yyyymmdd') <= to_date('20080420','yyyymmdd')) ;
+
+
+select sb.ACCESS_NBR 
+from sbscrp_asgm sa, access_line_nbr_asgm sb, HIRCH_ACCT_ASGM hr 
+where sa.sbscrp_id = sb.sbscrp_id 
+and sa.acct_nbr = hr.ACCT_NBR 
+and hr.acct_hirch_id = (select x.acct_hirch_id from HIRCH_ACCT_ASGM x
+        where x.acct_nbr = '0144672698'
+        and ((x.HIRCH_ACCT_ASGM_EXPR_DT  is null and to_date(x.HIRCH_ACCT_ASGM_EFF_DT, 'yyyymmdd') <= to_date('20080519','yyyymmdd'))
+        or (x.HIRCH_ACCT_ASGM_EXPR_DT  is not null 
+        and to_date(x.HIRCH_ACCT_ASGM_EXPR_DT , 'yyyymmdd') >= to_date('20080420','yyyymmdd')
+        and to_date(x.HIRCH_ACCT_ASGM_EFF_DT, 'yyyymmdd') <= to_date('20080519','yyyymmdd'))))     
+and sb.ACCESS_NBR = '6599824475'
+and ((sa.sbscrp_asgm_expr_dt is null and to_date(sa.sbscrp_asgm_eff_dt, 'yyyymmdd') <= to_date('20080519','yyyymmdd')) 
+    or (sa.sbscrp_asgm_expr_dt is not null 
+        and to_date(sa.sbscrp_asgm_expr_dt, 'yyyymmdd') >= to_date('20080420','yyyymmdd')
+        and to_date(sa.sbscrp_asgm_eff_dt, 'yyyymmdd') <= to_date('20080519','yyyymmdd')))
+and ((hr.HIRCH_ACCT_ASGM_EXPR_DT  is null and to_date(hr.HIRCH_ACCT_ASGM_EFF_DT, 'yyyymmdd') <= to_date('20080519','yyyymmdd'))
+    or (hr.HIRCH_ACCT_ASGM_EXPR_DT  is not null 
+        and to_date(hr.HIRCH_ACCT_ASGM_EXPR_DT , 'yyyymmdd') >= to_date('20080420','yyyymmdd')
+        and to_date(hr.HIRCH_ACCT_ASGM_EFF_DT, 'yyyymmdd') <= to_date('20080519','yyyymmdd')))
+and ((sb.access_nbr_asgm_expr_dt is null and to_date(sb.access_nbr_eff_dt, 'yyyymmdd') <= to_date('20080519','yyyymmdd'))
+    or (sb.access_nbr_asgm_expr_dt is not null 
+        and to_date(sb.access_nbr_asgm_expr_dt, 'yyyymmdd') >= to_date('20080420','yyyymmdd')
+        and to_date(sb.access_nbr_eff_dt, 'yyyymmdd') <= to_date('20080519','yyyymmdd')));
+
+
+
+[0144672698, 6599824475, 20080420, 20080519, 20080420, 20080519, 20080519, 20080420]

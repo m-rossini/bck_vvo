@@ -1,0 +1,20 @@
+<?xml version = "1.0" encoding = "UTF-8"?>
+<root>
+	<sql:configuration xmlns:sql="http://www.auster.com.br/common/sql/">
+
+		<sql:statements>
+			<sql:statement name="ImageBootstrap.delete">
+				<sql:query>DELETE FROM BCK_CONTROLL_REQUEST_INVOICE</sql:query>
+			</sql:statement>
+
+			<sql:statement name="ImageBuilderFinishListener.delete">
+				<sql:query>
+					DELETE FROM BCK_CONTROLL_REQUEST_INVOICE
+					WHERE ACCOUNT_NUMBER = ?
+					AND DUE_DATE = ?
+				</sql:query>
+			</sql:statement>
+		</sql:statements>
+
+	</sql:configuration>
+</root>

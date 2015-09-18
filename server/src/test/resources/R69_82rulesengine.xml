@@ -1,0 +1,88 @@
+<config>
+	<input-list-tag name="invoice-om" />
+	<results-map-tag name="consequence-list" />
+	<assertionEngine
+		class-name="br.com.auster.billcheckout.rules.assertion.XPathContextAssertionEngine"
+		xpath-file="src/main/conf/asr1/context-om-objects.xml" />
+
+	<rules-engine
+		class-name="br.com.auster.billcheckout.rules.Drools4DirectoriesRulesEngineProcessor">
+		<listeners
+			memoryListenerClass="br.com.auster.billcheckout.rules.listeners.StandardSessionListener"
+			agendaListenerClass="br.com.auster.billcheckout.rules.listeners.StandardAgendaListener"
+			flowListenerClass="br.com.auster.billcheckout.rules.listeners.StandardFlowListener"
+			agentListenerClass="br.com.auster.billcheckout.rules.listeners.StandardAgentListener" />
+
+		<RuleBaseConfig
+			propertiesFile="src/main/conf/asr1/rulebasebusiness.properties" />
+		<RuleAgentConfig
+			propertiesFile="src/main/conf/asr1/ruleagent.properties" />
+		<PackageBuilderConfig
+			propertiesFile="src/main/conf/asr1/packagebuilder.properties" />
+
+		<RulePackages>
+			<RulePackage name="PackageINITrules"
+				base="src/main/conf/drools" drlMask="INIT*.drl" />
+			<RulePackage name="PackageR69_82"
+				base="src/main/conf/drools" drlMask="R69_82-interest.drl" />
+		</RulePackages>
+	</rules-engine>
+
+	<globals-list>
+		<global name="dimensionCache"
+			class-name="br.com.auster.vivo.billcheckout.util.DimensionCache">
+		</global>
+
+		<global name="consequenceBuilder"
+			class-name="br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder">
+		</global>
+
+		<!-- cache de CEP para cidade (R69/82) -->
+		<global name="zipCodeCache"
+			class-name="br.com.auster.vivo.billcheckout.caches.ZipCodeCache"
+			config-file="">
+			<database pool-name="sql/tiamatdb">
+				<statement-names>
+					<stament-name name="R69_CityByZipCode" />
+				</statement-names>
+			</database>
+		</global>
+
+		<global name="dbservicesIF"
+			class-name="br.com.auster.vivo.billcheckout.cache.InterestFeeServices"
+			config-file="">
+			<database pool-name="sql/tiamatdb" sql-name="InterestFee" />
+		</global>
+
+		<global name="cityHolidayDateService"
+			class-name="br.com.auster.vivo.billcheckout.caches.R69R82CityHolidayCache">
+			<cache type="LRU" size="1" />
+			<database pool-name="sql/tiamatdb">
+				<statement-names>
+					<stament-name name="R69_82_City_Holiday" />
+				</statement-names>
+			</database>
+		</global>
+
+		<global name="stateHolidayDateService"
+			class-name="br.com.auster.vivo.billcheckout.caches.R69R82StateHolidayCache">
+			<cache type="LRU" size="1" />
+			<database pool-name="sql/tiamatdb">
+				<statement-names>
+					<stament-name name="R69_82_State_Holiday" />
+				</statement-names>
+			</database>
+		</global>
+
+		<global name="countryHolidayDateService"
+			class-name="br.com.auster.vivo.billcheckout.caches.R69R82CountryHolidayCache">
+			<cache type="LRU" size="1" />
+			<database pool-name="sql/tiamatdb">
+				<statement-names>
+					<stament-name name="R69_82_Country_Holiday" />
+				</statement-names>
+			</database>
+		</global>
+	</globals-list>
+
+</config>

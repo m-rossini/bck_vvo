@@ -1,0 +1,98 @@
+#created on: 18/02/2008
+package br.com.auster.rules.vivo.R73
+
+#list any import classes here.
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoDimensionsFacade;
+
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Iterator;
+
+import br.com.auster.vivo.billcheckout.cache.vo.DataBarnServicesByPlanListVO;
+import br.com.auster.vivo.billcheckout.cache.vo.DataBarnServiceByPlanVO;
+import br.com.auster.vivo.billcheckout.cache.vo.DataBarnServicesByAccountVO;
+
+import br.com.auster.common.text.DateFormat;
+
+#declare any global variables here
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.vivo.billcheckout.cache.DataBarnServicesByAccount dataBarnServicesByAccount;
+global br.com.auster.vivo.billcheckout.cache.DataBarnServicesByPlanCache dataBarnServicesByPlanCache;
+global java.util.List results;
+
+
+rule "R73 Serviços ativados indevidamente"
+	when
+		$acc : Account( $carrierCode : carrierCode )	
+
+		$inv : Invoice( account == $acc )	
+		
+		$detailList : ArrayList( size >= 1 )
+              from collect(ServiceDetail( elementType == "ACTIVATION_DETAIL" ))
+	then 
+		List<DataBarnServicesByAccountVO> servicesByAccountList = dataBarnServicesByAccount.getServicesByAccount($acc.getAccountNumber(), $inv.getCycleCode(), $inv.getOriginalCycleEndDate(), $inv.getOriginalCycleStartDate());
+		if (servicesByAccountList != null && servicesByAccountList.size() > 0) {
+			
+			// para cada serviço ativado
+			Iterator it = $detailList.iterator();
+			while (it.hasNext()) {
+				ServiceDetail detail = (ServiceDetail) it.next();
+				Section sec = detail.getSection().getParentSection();
+			
+				// Carrega os dados deste serviço
+				DataBarnServicesByPlanListVO servicesByPlanList = (DataBarnServicesByPlanListVO) dataBarnServicesByPlanCache.getFromCache(DataBarnServicesByPlanListVO.createKey(detail.getSvcId(), $inv.getOriginalCycleEndDate(), $inv.getOriginalCycleStartDate()));
+				if (servicesByPlanList != null && servicesByPlanList.getDataBarnServicesByPlanVOList()!= null && servicesByPlanList.getDataBarnServicesByPlanVOList().size() > 0) {
+
+					// percorre os serviços das subscrições
+					for (DataBarnServicesByAccountVO dataBarnServicesByAccountVO : servicesByAccountList) {
+						// verifica se  este serviço é da subscrição em questão
+						if (dataBarnServicesByAccountVO.getSubscriptionId().equals(sec.getSubscriptionid())) {
+							
+							for (DataBarnServiceByPlanVO dataBarnServiceByPlanVO : servicesByPlanList.getDataBarnServicesByPlanVOList()) {
+								
+								// verifica se o serviço ativado já estava incluso no plano
+								if(dataBarnServicesByAccountVO.getServiceName().equalsIgnoreCase(dataBarnServiceByPlanVO.getServiceName())) {
+									TelcoConsequence c;	    
+						    		consequenceBuilder.setRule("R73-01", "Serviços Ativados Indevidamente");
+						    		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+						    		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+						    		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+						    		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+						    		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($acc.getCarrierCode()));
+
+						    		c = (TelcoConsequence) consequenceBuilder.getConsequence();
+						    		c.setDescription("Serviço avulso ativado indevidamente pois já consta no plano");
+						    		c.addAttribute("Ciclo", sec.getInvoice().getCycleCode());
+						    		c.addAttribute("NomeDoServico", detail.getCaption());
+						    		c.addAttribute("Número do Terminal", sec.getChannelId());
+						    		c.addAttribute("Subscrição", sec.getSubscriptionid());
+						    		c.addAttribute("Nome do Estado", sec.getSubscriptionState());	
+						    		c.addAttribute("Nome do Serviço/Pacote", dataBarnServicesByAccountVO.getServiceName());	
+						    		c.addAttribute("Data Ativação", DateFormat.format(dataBarnServicesByAccountVO.getSvcAgrmntEffDt(), "yyyyMMdd", "dd/MM/yy"));
+						    		c.addAttribute("Data Expiração", DateFormat.format(dataBarnServicesByAccountVO.getSvcAgrmntTrmntnDt(), "yyyyMMdd", "dd/MM/yy"));
+						    		c.addAttribute("Período", DateFormat.format(dataBarnServicesByAccountVO.getSvcAgrmntEffDt(), "yyyyMMdd", "dd/MM/yy")+" a"+DateFormat.format(dataBarnServicesByAccountVO.getSvcAgrmntTrmntnDt(), "yyyyMMdd", "dd/MM/yy"));
+						    		c.addAttribute("Nome do Plano", detail.getCaption());	   			    	
+
+						    		results.add(c);		  
+									break;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+end
+

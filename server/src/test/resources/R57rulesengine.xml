@@ -1,0 +1,62 @@
+<config>
+	<input-list-tag name="invoice-om" />
+	<results-map-tag name="consequence-list" />
+	<assertionEngine
+		class-name="br.com.auster.billcheckout.rules.assertion.XPathContextAssertionEngine"
+		xpath-file="src/main/conf/asr1/context-om-objects.xml" />
+
+	<rules-engine
+		class-name="br.com.auster.billcheckout.rules.Drools4DirectoriesRulesEngineProcessor">
+
+		<RuleBaseConfig
+			propertiesFile="src/main/conf/asr1/rulebasebusiness.properties" />
+		<RuleAgentConfig
+			propertiesFile="src/main/conf/asr1/ruleagent.properties" />
+		<PackageBuilderConfig
+			propertiesFile="src/main/conf/asr1/packagebuilder.properties" />
+
+		<RulePackages>
+			<RulePackage name="PackageINITrules"
+				base="src/main/conf/drools" drlMask="INIT*.drl" />
+			<RulePackage name="PackageR57" base="src/main/conf/drools"
+				drlMask="R57-*" />
+		</RulePackages>
+	</rules-engine>
+	
+	<globals-list>
+	  	<global name="customerTypePlanCache"
+			class-name="br.com.auster.billcheckout.param.CustomerTypePlanCache">
+			<database pool-name="sql/tiamatdb" />
+		</global>
+
+		<global name="customerTypePlanCache"
+				class-name="br.com.auster.vivo.billcheckout.caches.R57CustomerTypePlanCache">
+			<cache type="NonLazy" auto-refresh-period="24" />
+			<database pool-name="sql/tiamatdb">
+				<statement-names>
+					<stament-name name="R57_CustomerTypePlan" />
+				</statement-names>
+			</database>
+		</global>
+
+		<global name="customerTypeCnpjPlanCache"
+				class-name="br.com.auster.vivo.billcheckout.caches.R57CustomerTypeCnpjPlanCache">
+			<cache type="NonLazy" auto-refresh-period="24" />
+			<database pool-name="sql/tiamatdb">
+				<statement-names>
+					<stament-name name="R57_CustomerTypeCnpjPlan" />
+				</statement-names>
+			</database>
+		</global>
+
+		<global name="dimensionCache"
+			class-name="br.com.auster.vivo.billcheckout.util.DimensionCache">
+		</global>
+
+		<global name="consequenceBuilder"
+			class-name="br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder">
+		</global>
+	</globals-list>
+
+</config>
+

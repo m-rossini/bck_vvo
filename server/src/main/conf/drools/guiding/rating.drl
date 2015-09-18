@@ -1,0 +1,72 @@
+package br.com.auster.rules.vivo.rating;
+
+import br.com.auster.common.rules.GlobalForLog;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.vivo.billcheckout.pricing.SubscriptionPricingProcess;
+import br.com.auster.vivo.billcheckout.pricing.UsagePricingProcess;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+
+global br.com.auster.vivo.billcheckout.pricing.SQLPricingFacadeBase priceEngine;
+global br.com.auster.vivo.billcheckout.pricing.SQLPricingFacadeBase subscriptionPriceEngine;
+
+/*  Salience is not used in StateLess working memory (with sequential mode).
+ *  However, the rule sequence is import in this file and the rules below
+ *  shouldn't be misplaced.
+ */ 
+
+// Load all the negotiated prices for this account
+rule "INIT-NegotiatedPrices" 
+	salience 100
+	when	
+		$acc : Account( )
+	then
+		if (priceEngine != null) {
+			Map prices = priceEngine.getAccountNegotiatedPricesBySubscription($acc);
+			if (prices == null) {
+				prices = new HashMap();
+			} 
+			$acc.setNegotiatedPrices(prices);
+		} else {
+		   	GlobalForLog.log("WARN", "Price Engine is NOT CONFIGURED. No rating will take place.");
+        	return;
+        }
+end 
+
+// Calculate price for subscription and usage simultaneously
+rule "Rate Subscription and Usage" 
+    salience 10 
+    no-loop true
+    when 
+    	$acc : Account( pricesNegotiated != null )
+    	
+        $usageList : ArrayList ()
+        	from collect (UsageDetail(objectType != "A"))
+        
+        $subList : ArrayList ()
+	    	from collect ( ServiceDetail(
+			 			   elementType  == "ACTIVATION_DETAIL" || == "ADDITIONAL_SERVICES_DETAIL",
+			 			   starDateBeforeEndDate == true)
+			 			 )
+    then
+		// do usage and subscription pricing simultaneouly
+		UsagePricingProcess usagePricing = null;
+		if ($usageList.size() > 0) {
+			priceEngine.setNegotUsagePricesMap($acc.getNegotiatedPrices());
+ 			usagePricing = UsagePricingProcess.doAsynchronously($acc.getAccountNumber(), $usageList, $acc.isPricesNegotiated(), priceEngine);
+ 		}
+
+		SubscriptionPricingProcess subscriptionPricing = null;
+		if ($subList.size() > 0) {
+			subscriptionPriceEngine.setNegotUsagePricesMap($acc.getNegotiatedPrices());
+			subscriptionPricing = SubscriptionPricingProcess.doAsynchronously($acc.getAccountNumber(), $subList, subscriptionPriceEngine);
+		}
+
+		if (subscriptionPricing != null) { subscriptionPricing.awaitCompletion(); }
+		if (usagePricing != null) { usagePricing.awaitCompletion(); }
+end

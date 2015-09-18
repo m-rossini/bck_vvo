@@ -1,0 +1,165 @@
+package br.com.auster.rules.vivo.R16;
+
+import br.com.auster.om.invoice.BarCode;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.UsageDetail;
+
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+import br.com.auster.billcheckout.param.CallThresholdVO;
+import br.com.auster.vivo.billcheckout.cache.vo.DataBarnRerateFlagVO;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.common.text.DurationFormat;
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+global br.com.auster.billcheckout.param.CallThresholdsCache callThresholdsCache;
+//global br.com.auster.vivo.billcheckout.cache.DataBarnRerateFlagServices dataBarnRerateFlagServices;
+
+/**
+ * RULE R16 - Thresholds de Uso Passthru
+ */
+ 
+rule "Regra R16-1"
+	salience 0
+	no-loop
+	when
+		$usage : UsageDetail(  
+			#passThrough == true
+			$dur : usageDuration != null,
+			$total : totalAmount,  
+			$ratio : amountRatio != Double.NaN,
+			$svcId : svcId,
+			$datetime : originalDatetime != null,
+			( elementType in (
+				"ROAM_MTC_INTERNATIONAL_DETAIL",
+				"INTERNATIONAL_CALLS_DETAIL",
+				"ROAM_MOC_LD_DETAIL",
+				"ROAM_MOC_INTERNATIONAL_DETAIL",
+				"WAPDetail",
+				"TonesAndImagesDetail",
+				"GamesAndApplicationsDetail",
+				"PlayDetail",
+				"ZAPDetail"
+			) ) ||
+			( carrierCode != "15" && (elementType == "LD_INTERSTATE_CALLS_DETAIL" || == "COLLECT_CALLS_DETAIL" || == "LD_INTRASTATE_CALLS_DETAIL")) ||
+			( passThrough == true && elementType == "ROAM_MOC_LOCAL_DETAIL" && svcPlan not matches ".*GESTAO.*" )
+		)
+		eval( callThresholdsCache != null && callThresholdsCache.getObjectByKey($usage.getCallClass(), $usage.getCallSubclass(), $usage.getTariffClass()) != null ) 					
+	then
+		double newratio;
+		boolean ratioApplied = true;
+		if ( ChecklistClasses.CALL_CLASS_AD1.equals($usage.getCallClass()) || 
+			 ChecklistClasses.CALL_CLASS_AD2.equals($usage.getCallClass()) ||
+			 ChecklistClasses.CALL_CLASS_AD3.equals($usage.getCallClass()) ||
+			 ChecklistClasses.CALL_CLASS_1xRTT.equals($usage.getCallClass()) || 
+			 ChecklistClasses.CALL_CLASS_PLAY.equals($usage.getCallClass()) ||
+			 ChecklistClasses.CALL_CLASS_WAP.equals($usage.getCallClass())) {
+			 newratio = $total;
+			 ratioApplied = false;
+		}
+		else { newratio = $ratio * 60; }
+		
+		String label = $usage.getSection().getSectionName();
+		CallThresholdVO thresholdVO = (CallThresholdVO) callThresholdsCache.getObjectByKey($usage.getCallClass(), $usage.getCallSubclass(), $usage.getTariffClass());
+
+		if (ratioApplied && callThresholdsCache.isUsageDurationOutBounds(thresholdVO, $dur.getType(), $dur.getUnits()) > 0 ) {
+			consequenceBuilder.setRule("R16-1","Uso Fora dos Limites"); 
+			consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+			consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+			consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+			consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+			consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($usage.getCarrierCode()));			
+
+			TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+			c.setDescription("Chamada fora do limite de duração.");					
+	
+	        c.addDateAttribute("Data", $usage.getDatetime(), "dd/MM/yy");
+	        c.addAttribute("NomeDoServico",$usage.getSvcPlan());                                            	                                            
+	        c.addAttribute("Hora", DurationFormat.formatFromDate($usage.getDatetime()));
+	        c.addAttribute("Número Origem",$usage.getChannelId());
+	        c.addAttribute("Número Destino", ValueFormat.formatPhone($usage.getCalledNumber())); 	                                            
+	        c.addAttribute("Classe Chamada",$usage.getCallClass());        
+	        c.addAttribute("Sub Classe",$usage.getCallSubclass());
+	        c.addAttribute("Classe Tarifa",$usage.getTariffClass());                 
+	        c.addAttribute("Valor Chamada", ValueFormat.formatValue($usage.getTotalAmount()));                         
+	        c.addAttribute("Relação Valor", ValueFormat.formatValue(newratio));	        
+	        c.addAttribute("Duração", $dur);        
+	        c.addAttribute("Duração Tabela",thresholdVO.getMaxDuration());	        
+	        c.addNullAttribute("Valor Tabela");	 	        
+			c.addAttribute("Seção Chamada",label);    
+			                             	
+	        results.add(c);   			
+		}
+
+		if (callThresholdsCache.isUsageMinValueOutBounds(thresholdVO, newratio ) > 0) {
+			consequenceBuilder.setRule("R16-2","Uso Fora dos Limites"); 
+			consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+			consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+			consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+			consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+			consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($usage.getCarrierCode()));			
+	
+			TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+			c.setDescription("Valor da Chamada inferior ao mínimo.");					
+
+	        c.addDateAttribute("Data", $usage.getDatetime(), "dd/MM/yy");      	      	                                            
+	        c.addAttribute("NomeDoServico",$usage.getSvcPlan());  
+	        c.addAttribute("Hora", DurationFormat.formatFromDate($usage.getDatetime()));                                         
+	        c.addAttribute("Número Origem",$usage.getChannelId());
+	        c.addAttribute("Número Destino", ValueFormat.formatPhone($usage.getCalledNumber())); 	 
+	        c.addAttribute("Classe Chamada",$usage.getCallClass());        
+	        c.addAttribute("Sub Classe",$usage.getCallSubclass());
+	        c.addAttribute("Classe Tarifa",$usage.getTariffClass());                 
+	        c.addAttribute("Valor Chamada", ValueFormat.formatValue($usage.getTotalAmount()));
+	        c.addAttribute("Relação Valor", ValueFormat.formatValue(newratio));	        	                             
+	        c.addAttribute("Duração", $dur);   
+	        c.addNullAttribute("Duração Tabela");	                                                                   
+	        c.addAttribute("Valor Tabela", ValueFormat.formatValue(thresholdVO.getMinValue()));	        
+			c.addAttribute("Seção Chamada",label);
+			                                  	
+	        results.add(c);   						
+		}
+
+		if (callThresholdsCache.isUsageMaxValueOutBounds(thresholdVO, newratio ) > 0) {
+			consequenceBuilder.setRule("R16-3","Uso Fora dos Limites"); 
+			consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+			consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));
+			consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));
+			consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));
+			consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($usage.getCarrierCode()));		
+	
+			TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+			c.setDescription("Valor da Chamada superior ao máximo.");					
+
+	        c.addDateAttribute("Data", $usage.getDatetime(), "dd/MM/yy");  	       	                                            
+	        c.addAttribute("NomeDoServico",$usage.getSvcPlan());      
+	        c.addAttribute("Hora", DurationFormat.formatFromDate($usage.getDatetime()));                                     
+	        c.addAttribute("Número Origem",$usage.getChannelId());
+	        c.addAttribute("Número Destino", ValueFormat.formatPhone($usage.getCalledNumber())); 	 	        	      	                                	       	                                            
+	        c.addAttribute("Classe Chamada",$usage.getCallClass());        
+	        c.addAttribute("Sub Classe",$usage.getCallSubclass());
+	        c.addAttribute("Classe Tarifa",$usage.getTariffClass());                 
+	        c.addAttribute("Valor Chamada", ValueFormat.formatValue($usage.getTotalAmount()));
+	        c.addAttribute("Relação Valor", ValueFormat.formatValue(newratio));	        	                                  
+	        c.addAttribute("Duração", $dur); 
+	        c.addNullAttribute("Duração Tabela");	                                                                      
+	        c.addAttribute("Valor Tabela", ValueFormat.formatValue(thresholdVO.getMaxValue()));	        
+			c.addAttribute("Seção Chamada",label);
+			                                  	
+	        results.add(c);			
+		}		
+
+end

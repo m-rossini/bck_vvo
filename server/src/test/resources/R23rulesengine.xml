@@ -1,0 +1,42 @@
+				<config>
+					<input-list-tag name="invoice-om"/>
+					<results-map-tag name="consequence-list"/>
+					<rules-engine
+						class-name="br.com.auster.billcheckout.drools.Drools4RulesEngineProcessor"
+						debug="false" dump-rete="false" output-file="log/rulesout.txt">
+						<rules-file file-name="src/main/conf/drools/INIT-sql-states.drl"/>						
+						<rules-file file-name="src/main/conf/drools/INIT-create-dimension-objects.drl"/>											
+						<rules-file file-name="src/main/conf/drools/R23-usage-promotions-validation.drl"/>											
+						<!--rules-file file-name="src/main/conf/drools/USAGE-DUMPER.drl"/-->						
+					</rules-engine>
+					
+					<globals-list>						
+						<global name="dimensionCache"
+							         class-name="br.com.auster.vivo.billcheckout.util.DimensionCache">
+					  </global>
+
+						<global name="consequenceBuilder"
+							         class-name="br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder">
+						</global>				
+
+						<global name="priceEngine"
+							         class-name="br.com.auster.vivo.billcheckout.pricing.SQLPricingFacadeImpl"
+							         pool-name="sql/tiamatdb">
+						</global>		
+
+						<global name="dbservicesR23"
+							class-name="br.com.auster.vivo.billcheckout.cache.UsagePromotionsServices"
+							config-file="">
+							<database pool-name="sql/tiamatdatabarn">
+								<statement-names>
+									<stament-name name="PromotionTypes"/>							
+									<stament-name name="PromotionEnrollments"/>									
+									<stament-name name="PromotionRanges"/>									
+									<stament-name name="PromotionControl"/>									
+								</statement-names>
+							</database>
+						</global>
+																			
+					</globals-list>
+					
+				</config>

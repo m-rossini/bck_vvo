@@ -1,0 +1,33 @@
+<?xml version = "1.0" encoding = "UTF-8"?>
+<root>
+	<sql:configuration xmlns:sql="http://www.auster.com.br/common/sql/">
+		<sql:statements>
+
+		<sql:statement name="USAGE_NEGOT_PRICE">
+			<sql:query>
+				select sbscrp_id, acct_nbr, 
+				svc_price_seq_nbr, svc_name,
+				OBJID,  CHARGE_TYPE,
+				EFFECTIVE_DATE, 
+				EXPIRATION_DATE,
+				SCENARIO_ID, FREE_UNITS_ID,
+				INITIAL_UNIT_VALUE,
+				INITIAL_UNIT_QTY, INITIAL_UNIT_TYPE,
+				INITIAL_UNIT_INCL_QTY,  STEP_UNIT_VALUE,
+				STEP_UNIT_QTY,  STEP_UNIT_TYPE,
+				STEP_UNIT_INCL_QTY,
+				'Y' as NEGOTIABLE_FLAG, 'N' as PASSTHROUGH_FLAG,
+				SP_AREA_ID,
+				TAX_CODE, sysdate as updated_date,
+				'' as CUSTOM_1, '' as CUSTOM_2, '' as CUSTOM_3,
+				negot_pct,  negot_type_cd,  negot_tax_incl_flag, '' as charge_type_id 
+				from R13_NEGOT_PRICE
+				where negot_type_cd is not null
+				and acct_nbr = ?
+			</sql:query>
+			<sql:param index="1" type="String" />						
+		</sql:statement>
+
+		</sql:statements>
+	</sql:configuration>
+</root>

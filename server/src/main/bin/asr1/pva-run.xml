@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<project name="auster-billcheckout" default="pva.run">
+
+    <property environment="env"/>
+
+    <target name="pva.run">
+
+		<delete dir="${report.source}"/>
+
+    <path id="run.classpath">
+       <fileset dir="${basedir}/lib" includes="*"/>
+       <pathelement location="${basedir}/conf"/>
+     </path>
+
+		<java classname="br.com.auster.vivo.billcheckout.BootstrapPVA"
+		resultproperty="java.result" 
+           	fork="yes"
+           	dir="${basedir}">
+
+	<jvmarg value="-d64"/>
+        <jvmarg value="-Xms2048M"/>
+        <jvmarg value="-Xmx2048M"/>
+        <jvmarg value="-server"/>
+		<!-- LWP thread model -->
+        <jvmarg value="-XX:+UseBoundThreads"/>
+		<!-- GC customization -->
+        <jvmarg value="-XX:+UseParallelGC"/>
+        <jvmarg value="-XX:ParallelGCThreads=2"/>
+        
+		<sysproperty key="java.endorsed.dirs"
+             value="${basedir}/lib/endorsed"/>
+
+			<sysproperty key="jdbc.drivers"
+				value="org.apache.commons.dbcp.PoolingDriver:oracle.jdbc.driver.OracleDriver"/>
+			
+			<sysproperty key="br.com.auster.billcheckout.PVAOnly" value="true"/>
+			<sysproperty key="auster.user.email" value="${user.email}"/>
+			<sysproperty key="auster.pva.output.name" value="${report.filename}"/>
+			<sysproperty key="auster.pva.output.dir" value="${report.dir}"/>
+			<sysproperty key="auster.pva.workdir" value="${report.source}"/>
+			<sysproperty key="auster.pva.message" value="${report.message}"/>
+			
+			<arg value="-x"/>
+			<arg file="conf/billcheckout-pva.xml"/>
+			<arg value="-b"/>
+			<arg value="default"/>
+			<arg value="-a"/>
+			<arg value="{{sirs={{filenames=${input.files}}}}}"/>
+			<arg line="-s false"/>
+			<classpath>
+				<path refid="run.classpath"/>
+			</classpath>
+		</java>
+
+    <fail message="Resultado do PVA" status="${java.result}">
+      <condition>
+        <or>
+          <not>
+            <isset property="java.result" />
+          </not>
+          <not>
+            <equals arg1="${java.result}" arg2="0" />
+          </not>
+        </or>
+      </condition>
+    </fail>
+    
+    </target>
+    
+</project>

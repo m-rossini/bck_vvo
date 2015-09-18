@@ -1,0 +1,26 @@
+#package br.com.auster.rules.vivo;
+
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+
+global java.util.List results;
+
+#
+#  585D - Chamadas em Roaming Internacional 
+#
+rule "585D ROI U" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "585D" )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_ROI);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_UNIQUE);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());    
+        $usage.setCallAsInternational();
+        $usage.setCallAsRoaming();   
+        $usage.setDetailCFOP("1200"); 
+end

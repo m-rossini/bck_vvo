@@ -1,0 +1,10 @@
+
+
+CLASSPATH=$CLASSPATH:$WL_HOME/server/ext/log4j-1.2.12.jar:$WL_HOME/server/ext/datedFileAppender-1.0.2.jar
+
+JAVA_OPTIONS=$JAVA_OPTIONS -Dlog4j.configuration=file:$WL_HOME/server/ext/log4j.xml
+JAVA_OPTIONS=$JAVA_OPTIONS -Dauster.facelift.configuration=$WL_HOME/server/ext/conf/portal.xml
+JAVA_OPTIONS=$JAVA_OPTIONS -Djdbc.drivers=org.apache.commons.dbcp.PoolingDriver:oracle.jdbc.driver.OracleDriver 
+
+export JAVA_OPTIONS CLASSPATH
+

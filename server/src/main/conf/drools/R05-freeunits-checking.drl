@@ -1,0 +1,305 @@
+package br.com.auster.rules.vivo.R05;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.vivo.billcheckout.util.DimensionCache ;
+import br.com.auster.vivo.billcheckout.util.FreeUnitsBucket;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.util.UnitCounter;
+import br.com.auster.om.util.UnitConvertor;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.om.invoice.SectionDetail;
+import br.com.auster.om.invoice.FreeUnitsDetail;
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.DataUsageDetail;
+import br.com.auster.om.invoice.EventUsageDetail;
+import br.com.auster.om.invoice.FreeUnitsDetail;
+import br.com.auster.om.pricing.ServicePrice;
+import br.com.auster.om.pricing.ServiceFreeUnits;
+import br.com.auster.om.pricing.TaxCategory;
+import br.com.auster.om.pricing.TaxRate;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+import br.com.auster.common.lang.NamedHashMap;
+import br.com.auster.common.rules.GlobalForLog;
+import java.util.Map;
+import java.util.HashMap;
+
+import br.com.auster.billcheckout.consequence.Consequence;
+
+import br.com.auster.common.text.DurationFormat;
+import br.com.auster.common.text.ValueFormat;
+
+global java.util.List results;
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.om.pricing.PricingFacade priceEngine;
+
+function TelcoConsequence buildR05_01Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		UsageDetail usage, String code, String description) {
+	consequenceBuilder.setRule(code, "Concessão de franquia"); 
+	consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+	consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+	consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+	consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+	consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(usage.getInvoice().getAccount().getCarrierCode()));
+
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(description);
+    
+    c.addAttribute("Terminal", usage.getChannelId());
+    c.addAttribute("NomeDoServico", usage.getSvcPlan());
+    c.addAttribute("Seq. Nbr. Do Serviço", usage.getSvcId());
+    c.addAttribute("Quantidade de Ativações", "");
+	c.addAttribute("Minutos Franquia", "");	
+	c.addAttribute("Minutos Franqueados", "");
+    c.addAttribute("Classe Chamada",usage.getCallClass());
+	c.addAttribute("Sub Classe Chamada", usage.getCallSubclass());
+	c.addDateAttribute("Data", usage.getDatetime(), "dd/MM/yy");
+	c.addAttribute("Hora", DurationFormat.formatFromDate(usage.getDatetime()));
+    c.addAttribute("Duração Chamada", usage.getUsageDuration());
+    c.addAttribute("Numero Origem", usage.getChannelId());
+    c.addAttribute("Numero Chamado", ValueFormat.formatPhone(usage.getCalledNumber()));
+    return c;
+}
+
+function TelcoConsequence buildR05_02Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		FreeUnitsBucket fub, String code, String description, Account acc) {
+	consequenceBuilder.setRule(code, "Concessão de franquia"); 
+	consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+	consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+	consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+	consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+	consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(acc.getCarrierCode()));
+
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(description);
+    
+    c.addAttribute("Terminal", fub.getRelatedAccessNumber());
+    c.addAttribute("NomeDoServico", fub.getServiceName());
+    c.addAttribute("Seq. Nbr. do Serviço", "");
+    c.addAttribute("Quantidade de Ativações", ValueFormat.formatQuantity(fub.getPkgQnt()));
+    c.addAttribute("Minutos Franquia",  DurationFormat.formatFromSeconds(fub.getIncludedUnits()));   
+    c.addAttribute("Minutos Franqueados",  DurationFormat.formatFromSeconds(fub.getUnitCounter()));            
+    c.addAttribute("Classe Chamada", "");
+    c.addAttribute("Sub Classe Chamada", "");
+    c.addAttribute("Data Hora", "");
+    c.addAttribute("Duração Chamada", "");
+    c.addAttribute("Número Origem", "");
+    c.addAttribute("Número Chamado", "");
+    return c;
+}
+
+/**
+ * RULE #05: Concessão de Benefícios sobre Uso
+ */
+
+rule "Regra R05-01"
+	salience 0
+	when
+		$usage : UsageDetail( 
+			tag in ("510D", "520D", "535D", "540D", "545D", "550D", "555D", "560D", "570D", "575D", "580D", "585D", "590D","595D", "600D", "680D"),
+			rated == true,
+			#passThrough == false,
+			freeIndicator == "U", # Neste caso a chamada NÂO FOI franqueada no SIRS
+			objectType != "A",
+			$priceInfo : price -> # Mas DEVERIA ter sido franqueada pela tabela price
+				( ($priceInfo != null) && (("F".equals($priceInfo.getChargeType()))) )
+			) 
+	then    
+        results.add(buildR05_01Consequence(dimensionCache, consequenceBuilder,
+					$usage, "R05-1",  "Franquia não foi aplicada"));
+end
+
+rule "Regra R05-02"
+	salience 0
+	when
+		$usage : UsageDetail( 
+			tag in ("510D", "520D", "535D", "540D", "545D", "550D", "555D", "560D", "570D", "575D", "580D", "585D", "590D","595D", "600D", "680D"),
+			rated == true,
+			#passThrough == false,
+			freeIndicator != "U", # Neste caso a chamada FOI franqueada
+			objectType != "A",
+			$priceInfo : price -> # Mas DEVERIA ter sido franqueada pela tabela price
+				( ($priceInfo != null) && (!("F".equals($priceInfo.getChargeType()))) )
+			) 		
+	then    
+        results.add(buildR05_01Consequence(dimensionCache, consequenceBuilder,
+					$usage, "R05-2",  "Franquia aplicada erroneamente."));
+end
+
+
+
+rule "Regra R05-INIT" # Cria as HashMaps iniciais
+	salience 100
+	when
+		not NamedHashMap(name == "SplitBillingAccount") // exclude split billing accounts from validation
+				
+		not ( NamedHashMap( name == "plans" ) )
+		not ( NamedHashMap( name == "freeunits" ) )
+		not ( NamedHashMap( name == "nbrsToFreeunits" ) )
+		not ( NamedHashMap( name == "services" ) )
+		not ( NamedHashMap( name == "servicesNotFound" ) )
+	then
+		NamedHashMap plans = new NamedHashMap("plans");
+		insert(plans);
+		NamedHashMap freeunits = new NamedHashMap("freeunits");
+		insert(freeunits);
+		NamedHashMap nbrsToFreeunits = new NamedHashMap("nbrsToFreeunits");
+		insert(nbrsToFreeunits);
+		NamedHashMap services = new NamedHashMap("services");
+		insert(services);
+		NamedHashMap servicesNotFound = new NamedHashMap("servicesNotFound");
+		insert(servicesNotFound);
+end
+
+rule "Regra R05-INIT2" # Insere todos os Planos
+	salience 90
+	when
+	    $plans : NamedHashMap( name == "plans" )
+		$detail : ServiceDetail( elementType == "SUBSCRIPTION_INFO")
+	then
+		String svcPlan = $detail.getCaption();
+		if (!$plans.containsValue(svcPlan)) {
+			$plans.put(svcPlan, $detail);
+			insert($plans);
+		}
+end 
+
+rule "Regra R05-INIT3" # Insere todos os eventos de uso nao encontrados na tabela prc_service_price
+	salience 90
+	when
+	    $servicesNF : NamedHashMap( name == "servicesNotFound" )
+		$usg : UsageDetail( objectType != "A",
+							tag in ("510D", "520D", "535D", "540D", "545D", "550D", "555D", "560D", "570D", "575D", "580D", "585D", "590D","595D", "600D", "680D"),
+							$price : price -> ($price == null))
+	then
+		if (!$servicesNF.containsKey($usg.getSvcId())) { //faz imprimir somente uma vez por numero do price
+			$servicesNF.put($usg.getSvcId(), $usg.getSvcPlan());
+			insert($servicesNF);
+        	results.add(buildR05_01Consequence(dimensionCache, consequenceBuilder,
+					 $usg, "R05-3",  "Svc_price_seq_nbr inexistente ou Data Expirada na tabela de Tarifas"));
+		}
+end 
+
+rule "Regra R05-INIT4" # Insere todos os eventos de uso no HashMap
+	salience 80
+	when
+	    $services : NamedHashMap( name == "services" )
+		$usg : UsageDetail( objectType != "A",
+							tag in ("510D", "520D", "535D", "540D", "545D", "550D", "555D", "560D", "570D", "575D", "580D", "585D", "590D","595D", "600D", "680D"),
+							$price : price -> (($price != null) && (("F".equals($price.getChargeType())))))
+	then
+		String svcPlan = $usg.getSvcPlan();
+		if (!$services.containsValue(svcPlan)) {
+			$services.put($usg.getPrice(), svcPlan);
+			insert($services);
+		}
+end 
+
+rule "Regra R05-INIT5" # Popula os buckets compartilhados
+	salience 75
+	when
+	    $nbrsToFreeunits : NamedHashMap( name == "nbrsToFreeunits" )
+	    $freeunits : NamedHashMap( name == "freeunits" )
+		$fud : FreeUnitsDetail(  )
+	then
+		FreeUnitsBucket bucket = (FreeUnitsBucket) $freeunits.get($fud.getAllocationKey()); 
+          if(bucket == null) { 
+              // in case no bucket was setup for this key, do it now 
+              bucket = new FreeUnitsBucket($fud.getAllocationKey(),  
+                                           true, // shared bucket 
+                                           $fud.getServiceName(), 
+                                           $fud.getTotalIncludedUnits().getUnits(), 
+                                           $fud.getTotalUsedUnits().getUnits()); 
+               $freeunits.put(bucket.getFreeUnitsId(), bucket); 
+               insert(bucket); 
+          } 
+          bucket.addAccessNumberDetail($fud.getAccessNumber(), $fud.getUsedUnits().getUnits()); 
+           
+          Map nbrsMap = (Map) $nbrsToFreeunits.get($fud.getAccessNumber()); 
+          if(nbrsMap == null) { 
+              nbrsMap = new HashMap(); 
+              $nbrsToFreeunits.put($fud.getAccessNumber(), nbrsMap); 
+          } 
+          nbrsMap.put(bucket.getFreeUnitsId(), bucket); 
+end 
+
+rule "Regra R05-INIT6" # Popula os buckets individuais
+	salience 70
+	when
+	    $nbrsToFreeunits : NamedHashMap( name == "nbrsToFreeunits" )
+		$usg : UsageDetail( objectType != "A",
+							tag in ("510D", "520D", "535D", "540D", "545D", "550D", "555D", "560D", "570D", "575D", "580D", "585D", "590D","595D", "600D", "680D"), 
+							$price : price -> (($price != null) && (("F".equals($price.getChargeType())))))
+	then
+		Map nbrsMap = (Map) $nbrsToFreeunits.get($usg.getChannelId()); 
+	    if(nbrsMap == null) { 
+			nbrsMap = new HashMap(); 
+	    	$nbrsToFreeunits.put($usg.getChannelId(), nbrsMap);
+        } 
+        
+        FreeUnitsBucket bucket = (FreeUnitsBucket) nbrsMap.get($price.getFreeUnits().getCustom1()); 
+        if(bucket == null) {
+            ServiceFreeUnits units = $price.getFreeUnits(); 
+            
+            UnitConvertor converter = priceEngine.getLocalUnitConvertor();
+            double quantity = converter.getConvertionFactor(units.getUnitType(), "TIME") * 
+                             units.getFreeUnitsQuantity().doubleValue(); 
+             
+            bucket = new FreeUnitsBucket(units.getCustom1(), // usage accum seq nbr 
+                                         false, // bucket not shared 
+                                         $price.getService().getServiceName(), 
+                                         quantity, quantity); 
+            bucket.addAccessNumberDetail($usg.getChannelId(), quantity); 
+            nbrsMap.put(bucket.getFreeUnitsId(), bucket); 
+            insert(bucket); 
+        } 
+        
+        bucket.addUnitCounter($usg);
+end 
+
+rule "Regra R05-INIT7" # Verifica se existe um produto ativo mais de uma vez e multiplica a quantidade de minutos
+	salience 60
+	when
+		$fub : FreeUnitsBucket ( $inc : includedUnits,
+							     $servName : serviceName,
+							     $accNbr : relatedAccessNumber )
+
+		$sec : Section( elementType  == "ADDITIONAL_SERVICES_TOTAL", accessNbr == $accNbr ) //330T
+		
+       $total : Number( doubleValue > 1 ) 
+        		from accumulate( ServiceDetail( elementType == "ADDITIONAL_SERVICES_DETAIL", //330D
+        								totalAmount >= 0,
+        								servicePrice!=null, //pode dar exception
+        								servicePrice.service.serviceName == $servName, //link dos serviceName's call(510D...) ao service(330D) 
+        								section == $sec),
+                              init( double total = 0; ),
+                              action( total += 1; ),
+                              result( total ) 
+        )
+	then
+		$fub.setPkgQnt($total.intValue());
+		$fub.setIncludedUnits($inc * $total.doubleValue());
+end 
+
+rule "Regra R05-CHECK1" # Verifica se o total concedido é maior que o total dado
+	salience 60
+	when
+	    $acc : Account(  )
+		$fub : FreeUnitsBucket ( $inc : includedUnits, 
+								 $usd : unitCounter)
+	then
+		if (($usd - $inc) > 0.01) {
+			results.add(buildR05_02Consequence(dimensionCache, consequenceBuilder, $fub, 
+			    "R05-4", "Franquia concedida em excesso.", $acc));
+		}
+end 

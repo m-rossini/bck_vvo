@@ -1,0 +1,182 @@
+#package br.com.auster.rules.vivo;
+
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+
+global java.util.List results;
+global br.com.auster.billcheckout.param.SimpleObjectComparation adBagReference;
+global br.com.auster.billcheckout.param.SimpleObjectComparation adBagReferenceAC;
+#
+#
+rule "665D FAX VC1" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+        	elementType  == "WAPDetail", 
+			caption == "FAX-LOCAL"
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_FAX);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_VC1);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setCallAsLocal();
+        $usage.setCallAsHome();       
+        $usage.setDetailCFOP("1230");        
+end
+
+rule "665D MODEM VC1" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+        	tag == "665D", 
+			caption == "MODEM - LOCAL"
+		)
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_MODEM);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_VC1);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName()); 
+        $usage.setCallAsLocal();
+        $usage.setCallAsHome();       
+        $usage.setDetailCFOP("1230");        
+end
+
+rule "665D ADICIONAL U" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+        	tag == "665D",
+        	caption == "ADICIONAL",
+			$ori : originState ,
+		    $dst : destinationState        
+		)
+    then
+		String accState = $usage.getSection().getParentSection().getParentSection().getSubscriptionState();		
+		if ($dst.equals("")) {
+			$usage.setCallClass(ChecklistClasses.CALL_CLASS_AD3);
+		} else if (adBagReference.isValid(accState,$ori)) {
+			$usage.setCallClass(ChecklistClasses.CALL_CLASS_AD1);
+		} else {
+			$usage.setCallClass(ChecklistClasses.CALL_CLASS_AD2);			
+		}
+		
+		#Sets the sub types		
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_UNIQUE);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());       
+        $usage.setCallAsRoaming();
+        $usage.setCallAsLocal();
+        $usage.setDetailCFOP("1230");				         
+end
+
+rule "665D WAP VC1" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                tag == "665D", 
+				caption == "DADOS",                              
+                calledNumber == "VIVO WAP" )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_WAP);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_VC1);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());  
+        $usage.setCallAsLocal();
+        $usage.setCallAsHome();                  
+end
+
+rule "665D WAP ROAM" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+                              tag == "665D", 
+                              calledNumber == "WAAAP", 
+                              caption == "VIVO WAP ROAMING" )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_WAP);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_ROAM);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());        
+        $usage.setCallAsLocal();
+        $usage.setCallAsRoaming();  
+        $usage.setDetailCFOP("1230");          
+end
+
+rule "665D ADICIONAL WAP" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail( 
+            tag == "665D",
+            caption == "VIVO WAP ADICIONAL" , 
+            calledNumber == "WAAAP", 
+        	$ori : originState ,
+			$dst : destinationState                      
+		)
+    then
+
+		String accState = $usage.getSection().getParentSection().getParentSection().getSubscriptionState();				
+		if ($dst.equals("")) {
+			$usage.setCallClass(ChecklistClasses.CALL_CLASS_AD3);
+		} else if (adBagReference.isValid(accState,$ori)) {
+			$usage.setCallClass(ChecklistClasses.CALL_CLASS_AD1);
+		} else {
+			$usage.setCallClass(ChecklistClasses.CALL_CLASS_AD2);			
+		}
+		
+		#Sets the sub types		
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_UNIQUE);
+        $usage.setTariffClass($usage.getTariff());
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());       
+        $usage.setCallAsLocal();
+        $usage.setCallAsRoaming(); 
+        $usage.setDetailCFOP("1230");
+end
+
+rule "665D Franquia WAP" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail(
+        	tag == "665D",  
+            caption == "GRATIS",
+			calledNumber == "VIVO WAP" )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_FRANQUIA);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_WAAAP);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());  
+        $usage.setCallAsLocal();
+        $usage.setCallAsHome();               
+end
+
+rule "665D Stadard WAP" 
+    salience 90 
+    no-loop true
+    when 
+        $usage : UsageDetail(  
+                              tag == "665D", 
+                              calledNumber == "888" )
+    then
+        $usage.setCallClass(ChecklistClasses.CALL_CLASS_WAP);
+        $usage.setCallSubclass(ChecklistClasses.CALL_SUBCLASS_WAAAP);
+        $usage.setTariffClass(ChecklistClasses.CALL_TARIFF_UNIQUE);
+        $usage.setGuided(true);       
+        $usage.setGuideRule(drools.getRule().getName());  
+        $usage.setCallAsLocal();
+        $usage.setCallAsHome();   
+        $usage.setDetailCFOP("1230");            
+end

@@ -1,0 +1,227 @@
+package br.com.auster.rules.vivo.R19;
+
+import java.util.Map.Entry;
+import java.util.Iterator;
+import java.util.HashMap;
+
+import java.util.concurrent.atomic.AtomicLong;
+import br.com.auster.common.rules.GlobalForLog;
+import br.com.auster.common.lang.NamedHashMap;
+import br.com.auster.common.lang.NamedDouble;
+
+import br.com.auster.om.invoice.BarCode;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.VoiceUsageDetail;
+
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.common.text.DurationFormat;
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+
+global java.util.List results;
+
+/**
+ * RULE #R19: AD e DSL tipo 1 devem ter amount igual a zeros
+ */
+ 
+/*
+*Rule 19.1 - Se DSL for tipo 1 e valor diferente de ZEROS, apontar erro
+*/ 
+
+rule "INIT Roaming Calls"
+	salience 20
+	when
+		not ( NamedDouble( name == "services" ) )
+	then
+		NamedDouble limit = new NamedDouble("RoamingCallsErrorLimit");	 
+		limit.setValue(9999);
+		insert(limit);
+		
+		NamedHashMap currentErrors = new NamedHashMap("CurrentRoamingErrors");	
+		currentErrors.put("ADZERO", new AtomicLong(0));
+		currentErrors.put("DSLZERO", new AtomicLong(0));		
+		insert(currentErrors);
+end
+
+/*
+*Rule 19.2 - Verifica se existe cobrança de AD/DSL de subscrição da área 74 (BA/SE)
+*            quando a mesma efetuou ligação à partir da área 87 (PE).
+*/ 
+rule "Regra R19-0"
+	salience 10
+	when
+		$Account : Account ( $csa : customerServiceArea -> ($csa.contains("74")))
+	
+		$usg : VoiceUsageDetail( 
+		    #passThrough == false,
+		    priceNegotiated == false,
+		    $totalAmount : totalAmount > 0,
+			$class : callClass == ChecklistClasses.CALL_CLASS_DSL2 || == ChecklistClasses.CALL_CLASS_AD2
+							|| == ChecklistClasses.CALL_CLASS_DSL1 || == ChecklistClasses.CALL_CLASS_AD1, 
+
+        	$ori : originCity -> ($ori.contains("87")),
+
+			$type  : objectType != "A")
+	then
+			consequenceBuilder.setRule("R19-0","Uso Não Zerado"); 
+			consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+			consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+			consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+			consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+			consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($usg.getCarrierCode()));			
+	 
+			TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+			c.setDescription("Valor de AD ou DSL diferente de zero para BA/SE (87-74)");					
+	
+	        c.addAttribute("Valor", ValueFormat.formatValue($usg.getTotalAmount()));        
+	        c.addDateAttribute("Data Chamada",$usg.getDatetime(), "dd/MM/yy");     
+	        c.addAttribute("Hora Chamada", DurationFormat.formatFromDate($usg.getDatetime()));               
+	        c.addAttribute("Número Acesso",$usg.getChannelId());
+	        c.addAttribute("Número Chamado", ValueFormat.formatPhone($usg.getCalledNumber()));                                                               
+			c.addAttribute("Operadora", $usg.getSection().getCaption());	
+			c.addAttribute("Cenário", $usg.getSvcId());
+			c.addAttribute("Estado 1", $usg.getDestinationState());			
+			c.addAttribute("Estado 2", $usg.getOriginState());						
+			c.addAttribute("SIRS Tag", $usg.getTag());			
+	        results.add(c);    
+end
+
+rule "Regra R19-1"
+	salience 10
+	when
+		$usg : VoiceUsageDetail( 
+		    #passThrough == false,
+		    priceNegotiated == false,
+			$class : callClass == ChecklistClasses.CALL_CLASS_DSL1, 
+			$amt : totalAmount != 0,
+			$type  : objectType != "A")
+			
+	    $lim : NamedDouble( name == "RoamingCallsErrorLimit" )
+	    $err : NamedHashMap( name == "CurrentRoamingErrors" )			
+	then
+		AtomicLong counter = (AtomicLong) $err.get("DSLZERO");
+		counter.incrementAndGet(); 		
+		if (counter.get() <= $lim.getValue() ) {		
+			consequenceBuilder.setRule("R19-1","Uso Não Zerado"); 
+			consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+			consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+			consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+			consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+			consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($usg.getCarrierCode()));			
+	 
+			TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+			c.setDescription("Valor de DSL1 diferente de Zeros.");					
+	
+	        c.addAttribute("Valor", ValueFormat.formatValue($amt));        
+	        c.addDateAttribute("Data Chamada", $usg.getDatetime(), "dd/MM/yy");   
+	        c.addAttribute("Hora Chamada", DurationFormat.formatFromDate($usg.getDatetime()));             
+	        c.addAttribute("Número Acesso", $usg.getChannelId());
+	        c.addAttribute("Número Chamado", ValueFormat.formatPhone($usg.getCalledNumber()));                                                               
+			c.addAttribute("Operadora", $usg.getSection().getCaption());	
+			c.addAttribute("Cenário", $usg.getSvcId());
+			c.addAttribute("Estado 1", $usg.getDestinationState());			
+			c.addAttribute("Estado 2", $usg.getOriginState());						
+			c.addAttribute("SIRS Tag", $usg.getTag());			
+	        results.add(c);         
+        }
+end
+
+
+/*
+*Rule 19.2 - Se AD for tipo 1 e valor diferente de ZEROS, apontar erro
+*/ 	
+rule "Regra R19-2"
+	salience 10
+	when
+		$usg : VoiceUsageDetail( 
+		    #passThrough == false,
+		    priceNegotiated == false,
+			$class : callClass == ChecklistClasses.CALL_CLASS_AD1, 
+			$amt : totalAmount != 0,
+			$type  : objectType != "A")
+			
+	    $lim : NamedDouble( name == "RoamingCallsErrorLimit" )
+	    $err : NamedHashMap( name == "CurrentRoamingErrors" )			
+	then
+		AtomicLong counter = (AtomicLong) $err.get("ADZERO");
+		counter.incrementAndGet(); 		
+		if (counter.get() <= $lim.getValue() ) {		
+			consequenceBuilder.setRule("R19-2","Uso Não Zerado"); 
+			consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+			consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+			consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+			consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+			consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($usg.getCarrierCode()));			
+				 
+			TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+			c.setDescription("Valor de AD1 diferente de Zeros.");					
+	
+	        c.addAttribute("Valor", ValueFormat.formatValue($amt));        
+	        c.addDateAttribute("Data Chamada", $usg.getDatetime(), "dd/MM/yy");      
+	        c.addAttribute("Hora Chamada", DurationFormat.formatFromDate($usg.getDatetime()));                 
+	        c.addAttribute("Número Acesso",$usg.getChannelId());
+	        c.addAttribute("Número Chamado", ValueFormat.formatPhone($usg.getCalledNumber()));                                                               
+			c.addAttribute("Operadora", $usg.getSection().getCaption());	
+			c.addAttribute("Cenário", $usg.getSvcId());
+			c.addAttribute("Estado 1", $usg.getDestinationState());			
+			c.addAttribute("Estado 2", $usg.getOriginState());						
+			c.addAttribute("SIRS Tag", $usg.getTag());			
+	        results.add(c);         
+        }
+end
+/**
+ * RULE #00-4: AD/DSL Zerados
+ */
+rule "R19 - Wrong Rating Counter Dump"
+	salience 0
+	when
+		Account( $carrierCode : carrierCode )
+	    $lim : NamedDouble( name == "RoamingCallsErrorLimit" )
+	    $err : NamedHashMap( name == "CurrentRoamingErrors" )
+	then	
+		AtomicLong counterAD = (AtomicLong) $err.get("ADZERO");
+		counterAD.incrementAndGet();	
+		if (counterAD.get() > $lim.getValue()) {
+			consequenceBuilder.setRule("A00-2","Contador de Tarifação Incorreta"); 
+			consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+			consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+			consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+			consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+			consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($carrierCode));			
+			TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+			c.setDescription("Adicional com Excesso de Erros de Tarifação.");	
+	    c.addAttribute("Nome do Plano", "AD" );                              
+	    c.addLongAttribute("Ocorrências",counterAD.get(), "0");                              	        
+	    results.add(c); 
+		}		
+		
+		AtomicLong counterDSL = (AtomicLong) $err.get("DSLZERO");
+		counterDSL.incrementAndGet(); 	
+		if (counterDSL.get() >  $lim.getValue()) {
+			consequenceBuilder.setRule("A00-2","Contador de Tarifação Incorreta"); 
+			consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+			consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+			consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+			consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+			consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($carrierCode));			
+			TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+			c.setDescription("Deslocamento com Excesso de Erros de Tarifação.");	
+	    c.addAttribute("Nome do Plano", "DSL" );                              
+	    c.addLongAttribute("Ocorrências",counterAD.get(), "0");                              	        
+	    results.add(c); 		
+		}
+end	

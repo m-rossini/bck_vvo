@@ -1,0 +1,26 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!DOCTYPE hibernate-configuration PUBLIC "-//Hibernate/Hibernate Configuration DTD 2.0//EN"
+ "http://hibernate.sourceforge.net/hibernate-configuration-2.0.dtd">
+
+<hibernate-configuration>
+
+    <session-factory>
+        <property name="show_sql">false</property>
+        <property name="use_outer_join">true</property>
+	<property name="hbm2ddl.auto">update</property>
+
+        <property name="connection.driver_class">org.postgresql.Driver</property>
+        <property name="connection.url">jdbc:postgresql://jean:5432/billcheckout</property>
+        <property name="connection.username">bc</property>
+        <property name="connection.password">password</property>
+        <property name="dialect">net.sf.hibernate.dialect.PostgreSQLDialect</property>
+
+
+        <mapping resource="br/com/auster/om/pricing/Service.hbm.xml"/>
+        <mapping resource="br/com/auster/om/pricing/ServicePrice.hbm.xml"/>
+        <mapping resource="br/com/auster/om/pricing/TaxCategory.hbm.xml"/>
+        <mapping resource="br/com/auster/om/pricing/ServiceFreeUnits.hbm.xml"/>
+        <mapping resource="br/com/auster/om/pricing/ImportRecord.hbm.xml"/>
+    </session-factory>
+
+</hibernate-configuration>

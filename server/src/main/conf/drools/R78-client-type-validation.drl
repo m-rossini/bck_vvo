@@ -1,0 +1,142 @@
+package br.com.auster.rules.vivo.R78;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.vivo.billcheckout.cache.vo.DataBarnAccountHirchVO;
+import br.com.auster.vivo.billcheckout.cache.vo.DataBarnAccountTypeVO;
+
+import java.util.List;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+global br.com.auster.vivo.billcheckout.cache.DataBarnAccountHirchCache dataBarnAccountHirchCache;
+global br.com.auster.vivo.billcheckout.cache.DataBarnAccountTypeCache dataBarnAccountTypeCache;
+
+function void buildR78Consequence01(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 String ruleNbr, String desc, Account account) {
+    consequenceBuilder.setRule(ruleNbr, "Tipo de Cliente/Conta Incompatível");
+    consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+    consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+    consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+    consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+    consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(account.getCarrierCode()));
+
+    TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+    c.setDescription(desc);	
+    c.addAttribute("Ciclo", account.getInvoice().getCycleCode());
+    c.addAttribute("Nome Cliente", account.getAccountName());
+    c.addAttribute("Tipo de Documento", (account.getIdentity("CPF") != null ? "CPF" : "CNPJ"));
+    c.addAttribute("Tipo de Cliente", account.getAccountType());
+    c.addAttribute("Tipo da Conta", account.getAccountType());
+    c.addAttribute("Número da Conta Raiz", "");
+    c.addAttribute("Tipo da Conta Raiz", "");
+    results.add(c); 
+}
+
+function void buildR78Consequence02(List results, DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 String ruleNbr, String desc, Invoice inv, String acctType, String parentAcct, String parentAcctType) {
+    consequenceBuilder.setRule(ruleNbr, "Tipo de Cliente/Conta Incompatível");
+    consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+    consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+    consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+    consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+    consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(inv.getAccount().getCarrierCode()));
+
+    TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+    c.setDescription(desc);	
+    c.addAttribute("Ciclo", inv.getCycleCode());
+    c.addAttribute("Nome Cliente", inv.getAccount().getAccountName());
+    c.addAttribute("Tipo de Documento", "");
+    c.addAttribute("Tipo de Cliente", "");
+    c.addAttribute("Tipo da Conta", acctType);
+    c.addAttribute("Número Da Conta Raiz", parentAcct);
+    c.addAttribute("Tipo da Conta Raiz", parentAcctType);
+    results.add(c); 
+}
+
+# Validação para clientes do tipo CPF
+rule "R78-01"
+salience 50
+	when
+		$acc : Account ( $id : identities['CPF'] -> ($id != null), // cliente tipo CPF
+						 $accTyp : accountType in ("C","D","E","G","H","I","P","V","A","J","K","L","M","Q","U","X","Y"))
+	then		
+		buildR78Consequence01(results, dimensionCache, consequenceBuilder, "R78-01", "Tipo de cliente inválido para conta CPF", $acc);
+end
+
+# Validação para clientes do tipo CNPJ
+rule "R78-02"
+salience 50
+	when
+		$acc : Account ( $id : identities['CPF'] -> ($id == null), // cliente tipo CNPJ
+						 $accTyp : accountType in ("B","F","S","T","W"))
+	then		
+		buildR78Consequence01(results, dimensionCache, consequenceBuilder, "R78-02", "Tipo de cliente inválido para conta CNPJ", $acc);
+end
+
+# Validação de Conta com fatura eletrônica
+rule "R78-03"
+salience 50
+	when
+		$inv : Invoice ( $startDt : originalCycleStartDate,
+					   	 $endDt : originalCycleEndDate)
+	then		
+		DataBarnAccountTypeVO dataBarnAccountTypeVO = (DataBarnAccountTypeVO) dataBarnAccountTypeCache.getFromCache(DataBarnAccountTypeVO.createKey($inv.getAccount().getAccountNumber()));
+		if (dataBarnAccountTypeVO != null) {
+			DataBarnAccountHirchVO dataBarnAccountHirchVO = (DataBarnAccountHirchVO) dataBarnAccountHirchCache.getFromCache(DataBarnAccountHirchVO.createKey($inv.getAccount().getAccountNumber(), $startDt, $endDt));
+			
+			if (dataBarnAccountHirchVO == null) {
+				buildR78Consequence02(results, dimensionCache, consequenceBuilder, "R78-03", "Conta sem informação de hierarquia", 
+										  $inv, dataBarnAccountTypeVO.getAcctTypeCd(), "", "");
+				return;
+			}
+			
+			// conta tipo ZC
+			else if (dataBarnAccountTypeVO.getAcctTypeCd().equals("ZC")) {
+				if (!dataBarnAccountHirchVO.getParentAcctNbr().equals($inv.getAccount().getAccountNumber())) {
+					buildR78Consequence02(results, dimensionCache, consequenceBuilder, "R78-03", "Conta é do tipo 'ZC' mas não é raiz da hierarquia", 
+										  $inv, dataBarnAccountTypeVO.getAcctTypeCd(), dataBarnAccountHirchVO.getParentAcctNbr(), "");
+				}	
+			} 
+			// conta tipo Z
+			else if (dataBarnAccountTypeVO.getAcctTypeCd().equals("Z")) {
+				if (dataBarnAccountHirchVO.getParentAcctNbr().equals($inv.getAccount().getAccountNumber())) {
+					buildR78Consequence02(results, dimensionCache, consequenceBuilder, "R78-03", "Conta é a raiz da hierarquia mas é do tipo 'Z'", 
+										  $inv, dataBarnAccountTypeVO.getAcctTypeCd(), dataBarnAccountHirchVO.getParentAcctNbr(), "");
+				} else {
+					DataBarnAccountTypeVO dataBarnAccountTypeVO2 = (DataBarnAccountTypeVO) dataBarnAccountTypeCache.getFromCache(DataBarnAccountTypeVO.createKey(dataBarnAccountHirchVO.getParentAcctNbr()));
+					if (dataBarnAccountTypeVO2 == null) {
+						buildR78Consequence02(results, dimensionCache, consequenceBuilder, "R78-03", "Conta raiz não possui informação de tipo de conta", 
+										      $inv, dataBarnAccountTypeVO.getAcctTypeCd(), dataBarnAccountHirchVO.getParentAcctNbr(), "");
+						return;
+					}
+					else if (!dataBarnAccountTypeVO2.getAcctTypeCd().equals("ZC")) {
+						buildR78Consequence02(results, dimensionCache, consequenceBuilder, "R78-03", "Conta é do tipo 'Z' mas a raiz da hierarquia não é 'ZC'", 
+										      $inv, dataBarnAccountTypeVO.getAcctTypeCd(), dataBarnAccountHirchVO.getParentAcctNbr(), dataBarnAccountTypeVO2.getAcctTypeCd());
+					}
+				}
+			} 
+			// outros tipos de conta
+			else {
+				DataBarnAccountTypeVO dataBarnAccountTypeVO2 = (DataBarnAccountTypeVO) dataBarnAccountTypeCache.getFromCache(DataBarnAccountTypeVO.createKey(dataBarnAccountHirchVO.getParentAcctNbr()));
+				if (dataBarnAccountTypeVO2 == null) {
+					buildR78Consequence02(results, dimensionCache, consequenceBuilder, "R78-03", "Conta raiz não possui informação de tipo de conta", 
+										      $inv, dataBarnAccountTypeVO.getAcctTypeCd(), dataBarnAccountHirchVO.getParentAcctNbr(), "");
+					return;
+				}
+				else if (dataBarnAccountTypeVO2.getAcctTypeCd().equals("ZC")) {
+					buildR78Consequence02(results, dimensionCache, consequenceBuilder, "R78-03", "Conta não é do tipo 'Z' nem 'ZC' porém a raiz da sua hierarquia é 'ZC'", 
+										      $inv, dataBarnAccountTypeVO.getAcctTypeCd(), dataBarnAccountHirchVO.getParentAcctNbr(), dataBarnAccountTypeVO2.getAcctTypeCd());
+				}
+			}
+		} 
+end

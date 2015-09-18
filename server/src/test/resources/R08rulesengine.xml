@@ -1,0 +1,66 @@
+<config>
+	<input-list-tag name="invoice-om" />
+	<results-map-tag name="consequence-list" />
+	<assertionEngine
+		class-name="br.com.auster.billcheckout.rules.assertion.XPathContextAssertionEngine"
+		xpath-file="src/main/conf/asr1/context-om-objects.xml" />
+	<rules-engine
+		class-name="br.com.auster.billcheckout.rules.Drools4DirectoriesRulesEngineProcessor">
+		<listeners
+			memoryListenerClass="br.com.auster.billcheckout.rules.listeners.StandardSessionListener"
+			agendaListenerClass="br.com.auster.billcheckout.rules.listeners.StandardAgendaListener"
+			flowListenerClass="br.com.auster.billcheckout.rules.listeners.StandardFlowListener"
+			agentListenerClass="br.com.auster.billcheckout.rules.listeners.StandardAgentListener" />
+
+		<RuleBaseConfig propertiesFile="src/main/conf/asr1/rulebasebusiness.properties" />
+		<RuleAgentConfig propertiesFile="src/main/conf/asr1/ruleagent.properties" />
+		<PackageBuilderConfig propertiesFile="src/main/conf/asr1/packagebuilder.properties" />
+
+		<RulePackages>
+			<RulePackage name="PackageINIT" base="src/main/conf/drools" drlMask="INIT-*.drl" />
+			<RulePackage name="PackageR08" base="src/main/conf/drools"
+				drlMask="R08*.drl" />
+		</RulePackages>
+	</rules-engine>
+
+	<globals-list>
+		<global name="dimensionCache"
+			class-name="br.com.auster.vivo.billcheckout.util.DimensionCache">
+		</global>
+		<global name="consequenceBuilder"
+			class-name="br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder">
+		</global>
+		
+		<global name="subscriptionServices"
+				class-name="br.com.auster.vivo.billcheckout.caches.R08SubscriptionServices">
+			<cache type="LRU" size="1000" />
+			<database pool-name="sql/tiamatdb">
+				<statement-names>
+					<stament-name name="R08_SubscriptionServices" />
+				</statement-names>
+			</database>
+		</global>
+
+		<global name="subscriptionPlan"
+				class-name="br.com.auster.vivo.billcheckout.caches.R08SubscriptionPlan">
+			<cache type="LRU" size="1" />
+			<database pool-name="sql/tiamatdb">
+				<statement-names>
+					<stament-name name="R08_SubscriptionPlan" />
+				</statement-names>
+			</database>
+		</global>
+
+		<global name="accountAndCycleChange"
+				class-name="br.com.auster.vivo.billcheckout.caches.R08AccountAndCycleChange">
+			<cache type="LRU" size="1" />
+			<database pool-name="sql/tiamatdb">
+				<statement-names>
+					<stament-name name="R08_AccountAndCycleChange" />
+				</statement-names>
+			</database>
+		</global>
+	
+		
+	</globals-list>
+</config>

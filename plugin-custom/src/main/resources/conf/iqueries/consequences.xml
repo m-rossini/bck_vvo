@@ -1,0 +1,27 @@
+ 
+<view display-name="Críticas de Billcheckout" datasource="ds2">
+	<columns>
+		<column name="external_id" 				display-name="Nr. da Requisição"
+				table="bck_consequence" 			type="long"		
+				visible="true"/>						
+		<column name="consequence_type" 			display-name="Tipo de Crítica" 	
+				table="bck_consequence" 			type="varchar"		
+				visible="true"/>						
+		<column name="consequence_label" 			display-name="Descrição" 	
+				table="bck_consequence" 			type="varchar"		
+				visible="true"/>						
+		<column name="triggered_rule" 			display-name="Nr. da Regra" 	
+				table="bck_consequence" 			type="varchar"		
+				visible="true"/>						
+		<column name="account_number" 			display-name="Nr. da Conta" 	
+				table="bck_consequence" 			type="varchar"		
+				visible="true"/>						
+		<column name="account_state" 				display-name="UF" 	
+				table="bck_consequence" 			type="varchar"		
+				visible="true"/>						
+		<column name="cycle_code" 				display-name="Ciclo de Faturamento" 	
+				table="bck_consequence" 			type="varchar"		
+				visible="true"/>						
+	</columns>
+</view>
+

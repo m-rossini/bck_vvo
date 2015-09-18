@@ -1,0 +1,122 @@
+package br.com.auster.rules.vivo.R02;
+
+import br.com.auster.om.invoice.VoiceUsageDetail;
+import br.com.auster.om.util.UnitCounter;
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.common.text.DurationFormat;
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+
+function TelcoConsequence buildR02Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		VoiceUsageDetail usage, String code, String description) {
+	consequenceBuilder.setRule(code, "Duração Inválida"); 
+	consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+	consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+	consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+	consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));	
+	consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(usage.getInvoice().getAccount().getCarrierCode()));
+
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(description);
+    c.addAttribute("Duração", usage.getUsageDuration());
+    c.addDateAttribute("Data Chamada", usage.getDatetime(), "dd/MM/yy");
+	c.addAttribute("Hora Chamada", DurationFormat.formatFromDate(usage.getDatetime()));
+	c.addAttribute("Operadora", usage.getCarrierCode());	
+	c.addAttribute("Estado", usage.getCarrierState());	
+    c.addAttribute("Classe Chamada", usage.getCallClass());
+	c.addAttribute("Sub Classe Chamada", usage.getCallSubclass());
+	c.addAttribute("Tarifa Chamada", usage.getTariffClass());
+    c.addAttribute("Número Acesso", usage.getChannelId());
+    c.addAttribute("Número Chamado", ValueFormat.formatPhone(usage.getCalledNumber()));
+    return c;
+}
+
+rule "R02-1 - Duração mínima da chamada nacional"
+    salience 0 
+	when
+        $call : VoiceUsageDetail(
+            objectType != "P",
+            totalAmount > 0,
+            callClass not in (
+                ChecklistClasses.CALL_CLASS_AD1,							
+                ChecklistClasses.CALL_CLASS_AD2,
+                ChecklistClasses.CALL_CLASS_AD3,							
+                ChecklistClasses.CALL_CLASS_ADICIONAL,							
+                ChecklistClasses.CALL_CLASS_NC,
+                ChecklistClasses.CALL_CLASS_INT,
+                ChecklistClasses.CALL_CLASS_INTR,
+                ChecklistClasses.CALL_CLASS_INTC,
+                ChecklistClasses.CALL_CLASS_ROI,
+                ChecklistClasses.CALL_CLASS_AGGREGATE
+            )
+        )
+        UnitCounter(
+            type == UnitCounter.TIME_COUNTER,
+            seconds < 30 // Parâmetro: duração mínima para chamadas nacionais
+        ) from $call.usageDuration
+	then
+		results.add(buildR02Consequence(dimensionCache, consequenceBuilder,
+				$call, "R02-1", "Tempo cobrado pela chamada é menor de 30 segundos" ));
+end
+
+rule "R02-2 - Duração mínima da chamada internacional"
+    salience 0 
+	when
+        $call : VoiceUsageDetail(
+            objectType != "P",
+            totalAmount > 0,
+            callClass in (
+                ChecklistClasses.CALL_CLASS_INT,
+                ChecklistClasses.CALL_CLASS_INTR,
+                ChecklistClasses.CALL_CLASS_INTC,
+                ChecklistClasses.CALL_CLASS_ROI
+            )
+        )
+        UnitCounter(
+            type == UnitCounter.TIME_COUNTER,
+            seconds < 30 // Parâmetro: duração mínima para chamadas internacionais
+        ) from $call.usageDuration
+	then
+		results.add(buildR02Consequence(dimensionCache, consequenceBuilder,
+				$call, "R02-2", "Tempo cobrado pela chamada internacional é menor de 30 segundos" ));
+end
+
+rule "R02-3 - Intervalo de duração da chamada"
+    salience 0 
+	when
+        $usage : VoiceUsageDetail(
+            totalAmount > 0,
+            callClass not in (
+                ChecklistClasses.CALL_CLASS_AD1,							
+                ChecklistClasses.CALL_CLASS_AD2,
+                ChecklistClasses.CALL_CLASS_AD3,							
+                ChecklistClasses.CALL_CLASS_ADICIONAL,							
+                ChecklistClasses.CALL_CLASS_NC,
+                ChecklistClasses.CALL_CLASS_INT,
+                ChecklistClasses.CALL_CLASS_INTR,
+                ChecklistClasses.CALL_CLASS_INTC,
+                ChecklistClasses.CALL_CLASS_ROI,
+                ChecklistClasses.CALL_CLASS_AGGREGATE
+            )
+        )
+        UnitCounter(
+            type == UnitCounter.TIME_COUNTER,
+            eval( seconds % 6 != 0 ) // Parâmetro: step de duração
+        ) from $usage.usageDuration
+	then
+		results.add(buildR02Consequence(dimensionCache, consequenceBuilder,
+				$usage, "R02-3", "Tempo cobrado pela chamada não é múltiplo de 6 segundos" ));
+end 

@@ -1,0 +1,15 @@
+<datasources>
+	<datasource name="ds1">
+		<property name="iq.jdbc.url">jdbc:postgresql://localhost:5432/portaldb</property>
+		<property name="iq.jdbc.driver">org.postgresql.Driver</property>
+		<property name="iq.jdbc.username">facelift</property>
+		<property name="iq.jdbc.password">flt16722</property>
+	</datasource>
+
+	<datasource name="ds2">
+		<property name="iq.jdbc.url">jdbc:postgresql://localhost:5432/billcheckout</property>
+		<property name="iq.jdbc.driver">org.postgresql.Driver</property>
+		<property name="iq.jdbc.username">billchk</property>
+		<property name="iq.jdbc.password">billchk</property>
+	</datasource>		
+</datasources>

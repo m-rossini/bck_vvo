@@ -1,0 +1,26 @@
+<view display-name="Taxas de Impostos" datasource="ds2">
+	<columns>
+		<column name="uid"
+				table="prc_tax_category"		type="long"			
+				visible="false"/>
+		<column name="tax_category_id"
+				table="prc_tax_rate"    	    type="long"			
+				visible="false"/>
+		<column name="tax_code"                 display-name="Categoria Tarifária"
+				table="prc_tax_category"		type="varchar"			
+				visible="true"/>
+		<column name="tax_key" 			        display-name="UF" 	
+				table="prc_tax_rate" 			type="varchar"		
+				visible="true"/>
+		<column name="tax_rate" 			    display-name="Taxa" 	
+				table="prc_tax_rate" 			type="double"		
+				visible="true"/>						
+	</columns>
+	<relations>
+		<relation from-table="prc_tax_category" 			
+				  from-column="uid" 
+				  to-table="prc_tax_rate" 	
+				  to-column="tax_category_id"/>
+	</relations>
+</view>
+

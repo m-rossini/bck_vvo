@@ -1,0 +1,600 @@
+#package br.com.auster.rules.vivo.R65one;
+
+import java.util.Map;
+import java.util.List;
+import java.lang.Math;
+import java.lang.Double;
+import java.lang.String;
+import java.util.HashMap;
+import java.util.Map.Entry;
+import java.util.ArrayList;
+import br.com.auster.om.util.ParserUtils;
+import br.com.auster.om.invoice.ChargedTax;
+import br.com.auster.common.lang.NamedDouble;
+import br.com.auster.common.lang.NamedHashMap;
+import org.apache.commons.math.util.MathUtils;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Receipt;
+import br.com.auster.om.invoice.ReceiptDetail;
+import br.com.auster.om.invoice.UsageDetail;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+
+import br.com.auster.om.invoice.*;
+
+import br.com.auster.common.text.ValueFormat;
+import br.com.auster.common.text.DurationFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+
+function TelcoConsequence R65ConsequenceSecOne(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+		 				 String carrier, String ruleNbr, String desc, String cycle, String carrierName, String carrierCode,
+		 				 String carrierState, String tipoConta, String cfop, String descrCFOP, int qtde, Number qtdeSoma, double valor, 
+		 				 Number valorSoma, String dur, String durSoma){
+		
+		//setando parâmetros padroes para a consequência
+		consequenceBuilder.setRule(ruleNbr, "Sumario das Notas Fiscais"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(carrier));
+		
+		//definindo os atributos que serão gerados na crítica
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription(desc);
+		//atributos para ambas sub-regras
+		c.addAttribute("Ciclo", cycle);
+		c.addAttribute("Nome Operadora", carrierName);
+		c.addAttribute("Código Operadora", carrierCode);
+		c.addAttribute("Sigla Estado", carrierState);
+		c.addAttribute("Tipo Conta", tipoConta);	
+		c.addAttribute("CFOP", cfop);	
+		c.addAttribute("Descr. CFOP", descrCFOP);	
+		c.addAttribute("Quantidade", ValueFormat.formatQuantity(qtde));	
+		c.addAttribute("Quantidade Soma", ValueFormat.formatQuantity(qtdeSoma));	
+		c.addAttribute("Valor", ValueFormat.formatValue(valor));	
+		c.addAttribute("Valor Soma", ValueFormat.formatValue(valorSoma));	
+		c.addAttribute("Duração", DurationFormat.formatFromMinute(dur));	
+		c.addAttribute("Duração Soma", DurationFormat.formatFromMinute(durSoma));	
+		
+  		return c;
+}
+
+//controla tag/operadora que serão mostradas na subregra "mostra 1 e 2"
+/*
+rule "R65-mapControle"
+salience 96
+when
+	not (NamedHashMap( name == "control" ))	
+then
+	insert(new NamedHashMap("control"));
+end
+*/
+//Mapa de operadoras
+rule "R65-mapCarrier"
+salience 95
+when
+	VoiceUsageDetail($carrierCode : carrierCode)
+	not (NamedHashMap( name == ("carrier"+$carrierCode)))
+then
+	insert(new NamedHashMap("carrier"+$carrierCode));
+end
+
+rule "R65-feedCarrierTagMap"
+salience 93
+when	
+	//$control : NamedHashMap(name == "control")
+	$mapTag: NamedHashMap( name == "tag" )
+	VoiceUsageDetail($carrierCode : carrierCode,
+					 $tag : tag in ("510D","680D","520D","535D","540D","550D","545D",
+					 "555D","570D","580D","560D","575D","585D","590D","595D","600D"),
+	  				 $amount : totalAmount)
+
+	$carrierMap: NamedHashMap(name == ("carrier"+$carrierCode))
+
+then	
+	if (!$carrierMap.containsKey($mapTag.get($tag))) {
+		NamedDouble[] valuesList = new NamedDouble[3];		
+			
+		if ($tag.equals("555D") || $tag.equals("560D") || $tag.equals("570D")){
+			valuesList[0] = new NamedDouble("valor",0D);
+			valuesList[1] = new NamedDouble("duracao",0D);
+			valuesList[2] = new NamedDouble("qtde",0D);
+			$carrierMap.put($mapTag.get($tag), valuesList);						
+			//$control.put($tag, new HashMap());
+		}
+		else{
+			if($amount!=0D && ($tag.equals("590D") || $tag.equals("595D") || $tag.equals("600D")) ){
+				valuesList[0] = new NamedDouble("valor",0D);
+				valuesList[2] = new NamedDouble("qtde",0D);
+				$carrierMap.put($mapTag.get($tag), valuesList);		
+				//$control.put($tag, new HashMap());
+			}
+			else{
+				if ($amount!=0D){
+					valuesList[0] = new NamedDouble("valor",0D);
+					valuesList[1] = new NamedDouble("duracao",0D);
+					valuesList[2] = new NamedDouble("qtde",0D);
+					$carrierMap.put($mapTag.get($tag), valuesList);
+					//$control.put($tag, new HashMap());
+				}
+			}
+		}		
+	}
+end
+
+//registra e soma as tags por operadora
+rule "R65-AccumOne"
+salience 70
+when
+	$mapTag  : NamedHashMap( name == "tag" )
+
+	VoiceUsageDetail( 
+		$tag : tag in ("510D","680D","520D","535D","540D","550D","545D","555D","570D","580D","560D","575D","585D"),
+		objectType != "A",
+		$carrierCode : carrierCode,
+		$duracao : originalUsageDuration,
+		$valor : totalAmount	//double	
+	)
+	$carrierMap: NamedHashMap(name == ("carrier"+$carrierCode))
+then
+	if ($carrierMap.containsKey($mapTag.get($tag))) {	
+		NamedDouble[] valuesList = (NamedDouble[]) $carrierMap.get($mapTag.get($tag));
+		
+		if (valuesList != null) {
+			NamedDouble value = valuesList[0];
+			NamedDouble dur = valuesList[1];
+			NamedDouble qtt = valuesList[2];		
+					
+			if ($tag.equals("555D") || $tag.equals("560D") || $tag.equals("570D")){ //pq msm $valor==0, conta a duracao e qtde
+				value.addTo($valor);
+				dur.addTo(ParserUtils.getDouble($duracao));
+				qtt.addTo(1);
+				$carrierMap.put($mapTag.get($tag), valuesList);		
+			}else{
+				 if ($valor!=0D){
+				 	value.addTo($valor);
+					dur.addTo(ParserUtils.getDouble($duracao));
+					qtt.addTo(1);						
+					$carrierMap.put($mapTag.get($tag), valuesList);
+				 }
+			}
+		}
+	}
+end
+
+//registra e soma as tags por operadora
+rule "R65-AccumTwo"
+salience 70
+when
+	$mapTag  : NamedHashMap( name == "tag" )
+
+	VoiceUsageDetail( 
+		$tag : tag in ("590D","595D","600D"),
+		objectType != "A",
+		totalAmount != 0,
+		$carrierCode : carrierCode,
+		$duracao : originalUsageDuration,
+		$valor : totalAmount	//double	
+	)
+	$carrierMap: NamedHashMap(name == ("carrier"+$carrierCode))
+then
+	if ($carrierMap.containsKey($mapTag.get($tag))) {
+		NamedDouble[] valuesList = (NamedDouble[]) $carrierMap.get($mapTag.get($tag));
+		
+		if (valuesList != null) {
+			NamedDouble value = valuesList[0];
+			NamedDouble qtt = valuesList[2];		
+			
+			value.addTo($valor);
+			qtt.addTo(1);
+			$carrierMap.put($mapTag.get($tag), valuesList);
+		}
+	}
+end
+rule "R65-TagCFOPDescr"
+salience 99
+when
+	not (NamedHashMap( name == "tag" ))	//armazena tag + cfop registrados para depois listá-los
+then
+	NamedHashMap map = new NamedHashMap("tag");
+	
+	map.put("510D", "1110Chamadas Locais Originadas");
+	map.put("680D", "1110Utilização de Outros Serviços de Voz");
+	map.put("520D", "1120Chamadas Recebidas a Cobrar - Locais");
+	map.put("535D", "1130Chamadas de Longa Distância Dentro do Estado");
+	map.put("540D", "1140Chamadas de Longa Distância para Outros Estados");
+	map.put("550D", "1150Chamadas de Longa Distância Efetuadas Internacionais");
+	map.put("545D", "1160Chamadas Recebidas a Cobrar - Exceto Locais");
+	map.put("555D", "1170Chamadas Locais Originadas");
+	map.put("570D", "1170Chamadas de Longa Distância Originadas");
+	map.put("580D", "1180Chamadas de Longa Distância Efetuadas Internacionais");
+	map.put("560D", "1190Chamadas Locais Recebidas");
+	map.put("575D", "1190Chamadas de Longa Distância Recebidas");
+	map.put("585D", "1200Chamadas Realizadas / Recebidas no Exterior - Vivo no Mundo");
+	map.put("590D", "1210Chamadas para Números Específicos");  //só tem valor e qtde
+	map.put("595D", "1210Chamadas para Números 0500");		   //só tem valor e qtde
+	map.put("600D", "1260Serviços Prestados por Terceiros");   //só tem valor e qtde
+	
+	insert(map);
+end
+
+rule "R65-01-1" // todos mapeados, menos chaves 590D, 595D e 600D
+salience 0
+when
+	$mapTag  : NamedHashMap( name == "tag" )
+
+	Account(
+		$accCarrierCode : carrierCode, //uso padrão no carrierCode da consequencia
+		$ciclo  : invoice.cycleCode,
+		$tipoConta: accountType
+	) 
+	ReceiptDetail( 
+		$cfop : fiscalCode in ("1110","1120","1130","1140","1150","1160","1170","1180","1190","1200"),  //lendo chaves 202Y
+		$codOper : receipt.carrierCode,
+		$nomeOperadora : receipt.carrierName,
+		$descr : caption,
+		$durac : eventUnits.minutes,
+		$estado : receipt.carrierState,
+		$qtde : eventQuantity, //int
+		$valor : totalAmount   //double
+	)
+	
+	$carrierMap: NamedHashMap(name == ("carrier"+$codOper))
+then
+	if ($carrierMap.containsKey($cfop+$descr)) {
+		NamedDouble[] valuesList = (NamedDouble[]) $carrierMap.get($cfop+$descr);	
+		
+		if (valuesList != null) {
+			NamedDouble mapValor = valuesList[0];
+			NamedDouble mapDuracao = valuesList[1];
+			NamedDouble mapQtde = valuesList[2];	
+			
+			Double durac = (Double) $durac; //transformando Object em double, pois daria erro
+				
+			if (!( Math.abs(Math.round(mapValor.getValue()*100))   == Math.abs(Math.round($valor*100)) ) ||
+				!( Math.abs(Math.round(mapQtde.getValue()*100))    == Math.abs(Math.round($qtde*100)) )  ||
+				!( Math.abs(Math.round(mapDuracao.getValue()*100)) == Math.abs(Math.round(durac*100))) )
+			{
+				results.add(R65ConsequenceSecOne(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-01-1",
+						"Divergencia nos valores dos Itens",$ciclo.toString(),$nomeOperadora.toString(),$codOper.toString(),
+						$estado.toString(),$tipoConta, $cfop, $descr, $qtde, (Number)mapQtde.getValue(), $valor,
+						(Number)mapValor.getValue(), durac.toString(), String.valueOf(mapDuracao.getValue())));
+			}
+		}
+	}
+end
+
+rule "R65-01-2" // todos mapeados, menos chaves 590D, 595D e 600D
+salience 0
+when
+	$mapTag  : NamedHashMap( name == "tag" )
+
+	Account(
+		$accCarrierCode : carrierCode, //uso padrão no carrierCode da consequencia
+		$ciclo  : invoice.cycleCode,
+		$tipoConta: accountType
+	) 
+	ReceiptDetail( 
+		$cfop : fiscalCode in ("1210","1260"),  //lendo chaves 202Y
+		$codOper : receipt.carrierCode,
+		$nomeOperadora : receipt.carrierName,
+		$descr : caption,
+		$durac : eventUnits.minutes,
+		$estado : receipt.carrierState,
+		$qtde : eventQuantity, //int
+		$valor : totalAmount   //double
+	)
+	$carrierMap: NamedHashMap(name == ("carrier"+$codOper))
+then
+	if ($carrierMap.containsKey($cfop+$descr)) {
+		NamedDouble[] valuesList = (NamedDouble[]) $carrierMap.get($cfop+$descr);	
+	
+		if (valuesList != null) {
+			NamedDouble mapValor = valuesList[0];
+			NamedDouble mapQtde = valuesList[2];	
+		
+			double durac = (Double) $durac; //transformando Object em double, pois daria erro
+			if (!( Math.abs(Math.round(mapValor.getValue()*100))   == Math.abs(Math.round($valor*100)) ) ||
+				!( Math.abs(Math.round(mapQtde.getValue()*100))    == Math.abs(Math.round($qtde*100)) ) ) 
+			{
+				results.add(R65ConsequenceSecOne(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-01-2",
+						"Divergencia nos valores dos Itens",$ciclo.toString(),$nomeOperadora.toString(),$codOper.toString(),
+						$estado.toString(),$tipoConta, $cfop, $descr, $qtde, (Number)mapQtde.getValue(), $valor,
+						(Number)mapValor.getValue(),"",""));
+			}
+		}
+	}
+end
+
+
+
+rule "R65-01-INIT"
+salience 90
+when
+	not (  NamedHashMap( name == "R65NF" ) )
+then
+	NamedHashMap carrier = new NamedHashMap("R65NF");
+	insert (carrier);
+end
+
+//Adicionando 202Y descriçãoCFOP e numeroCFOP, por operadora
+rule "R65-ACCUMULATE-NF"
+salience 80
+when
+	$R65NF : NamedHashMap( name == "R65NF" )
+	ReceiptDetail(
+				  $cfop : fiscalCode in ("1010", "1030", "1040"),  //lendo chaves 202Y
+				  $codOperadora : receipt.carrierCode,
+				  $nomeOperadora : receipt.carrierName,
+				  $estado : receipt.carrierState,
+				  $descrCFOP : caption,
+				  $qtde : eventQuantity, //int
+				  $valor : totalAmount   //double 
+	)
+then
+	HashMap map = new HashMap();
+	map.put($descrCFOP, $cfop);
+
+	if (!$R65NF.containsKey($codOperadora)) {
+		$R65NF.put($codOperadora, map);
+	} else {
+		HashMap cfopMap = (HashMap) $R65NF.get($codOperadora);
+		cfopMap.put($descrCFOP, $cfop);
+	}
+end
+
+//tentando validar tanto cfop e suas chaves, como vice-versa, verificando existencia de cfop tambem qdo valores chaves !=0
+//validando onde não temos nas chaves o código da operadora disponivel, sabendo que se trata da 00-VIVO
+//validando somente vivo
+rule "R65-01-3"
+salience 0
+when
+	$mapNF : NamedHashMap( name == "R65NF" )
+	Account(
+		$accCarrierCode : carrierCode, //uso padrão no carrierCode da consequencia
+		$ciclo  : invoice.cycleCode,
+		$tipoConta: accountType,
+		$estado : carrierState
+	) 
+	$receiptDetail : ArrayList() from collect (ReceiptDetail(
+														fiscalCode in ("1010", "1030", "1040"),
+														receipt.carrierCode == "00"
+											   ) 									  
+	)
+	$count1010 : Number() from accumulate (
+			ServiceDetail(
+				$tag : tag in ("325D")
+			),
+			count($tag)
+	)
+	$valor1010 : Number() from accumulate (
+			ServiceDetail(
+				$tag : tag in ("325D"),
+				$value : totalAmount
+			),
+			sum($value)
+	)
+	$count1030 : Number() from accumulate (
+			ServiceDetail(
+				$tag : tag in ("330D"),
+				caption != "CONTA DETALHADA MENSAL"
+			),
+			count($tag)
+	)
+	$valor1030 : Number() from accumulate (
+			ServiceDetail(
+				$tag : tag in ("330D"),
+				$value : totalAmount
+			),
+			sum($value)
+	)
+	$count1040_340 : Number() from accumulate (
+			ServiceDetail(
+				$tag : tag in ("340D") 
+			),
+			count($tag)
+	)
+	$valor1040_340 : Number() from accumulate (
+			ServiceDetail(
+				$tag : tag in ("340D"),
+				$value : totalAmount
+			),
+			sum($value)
+	)
+	$count1040_others : Number() from accumulate (
+			OneTimeEventDetail(
+				$tag : tag in ("270D","401D") 
+			),
+			count($tag) 
+	)
+	$valor1040_others : Number() from accumulate (
+			OneTimeEventDetail(
+				tag in ("270D","401D"),
+				$value : totalAmount
+			),
+			sum($value)	
+	)									     
+then
+	Number valor1040 = (Number) ($valor1040_340.doubleValue() + $valor1040_others.doubleValue());
+	Number count1040 = (Number) ($count1040_340.intValue() + $count1040_others.intValue());
+	HashMap mapCfop = (HashMap) $mapNF.get("00");
+		
+	//verifica os valores de soma/valor dos cfop's existentes, e se, existir cfop e não existir chave, com Number==0, critica	
+	for (ReceiptDetail receiptDetail : (ArrayList<ReceiptDetail>) $receiptDetail) {
+		String nomeOperadora = receiptDetail.getReceipt().getCarrierName(); 
+		String codOperadora  = receiptDetail.getReceipt().getCarrierCode();
+		String estado = receiptDetail.getReceipt().getCarrierState();
+		String cfop = receiptDetail.getFiscalCode();
+		String descrCFOP = receiptDetail.getCaption();
+		
+		int qtde = receiptDetail.getEventQuantity();
+		double valor = receiptDetail.getTotalAmount(); 	
+		
+	if (cfop.equals("1010") && descrCFOP.equals("Planos Contratados")){
+		if ( qtde!=$count1010.intValue() || Math.abs(Math.round(valor*100))!=Math.abs(Math.round($valor1010.doubleValue()*100)) ) {	
+			results.add(R65ConsequenceSecOne(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-01-3",
+				"Divergencia nos valores dos Itens",$ciclo.toString(),nomeOperadora,codOperadora,
+				estado,$tipoConta, cfop, descrCFOP, qtde, $count1010, valor, $valor1010, "",""));
+		}
+	}
+	if (cfop.equals("1030") && descrCFOP.equals("Serviços Adicionais")){
+		if ( qtde!=$count1030.intValue() || Math.abs(Math.round(valor*100))!=Math.abs(Math.round($valor1030.doubleValue()*100)) ) {	
+			results.add(R65ConsequenceSecOne(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-01-3",
+				"Divergencia nos valores dos Itens",$ciclo.toString(),nomeOperadora,codOperadora,
+				estado,$tipoConta, cfop, descrCFOP, qtde, $count1030, valor, $valor1030,"",""));
+		}
+	}
+	if (cfop.equals("1040") && descrCFOP.equals("Descontos")){
+		if ( qtde!=count1040.intValue() || Math.abs(Math.round(valor*100))!=Math.abs(Math.round(valor1040.doubleValue()*100)) ) {	
+			results.add(R65ConsequenceSecOne(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-01-3",
+				"Divergencia nos valores dos Itens",$ciclo.toString(),nomeOperadora,codOperadora,
+				estado,$tipoConta, cfop, descrCFOP, qtde, count1040, valor, valor1040,"",""));
+		}					
+	}
+	} //for
+end
+
+// Validacao da CFOP 1230, considerando existencia exclusiva para a VIVO
+// Nestas somatórias abaixo, colocado objectType != "A", por precaução, pois neste caso não deu erro em teste
+
+rule "R65-01-4"
+salience 0
+when
+	Account(
+		$accCarrierCode : carrierCode, //uso padrão no carrierCode da consequencia
+		$ciclo  : invoice.cycleCode,
+		$tipoConta : accountType,
+		$estado : carrierState 
+	) 
+	$receiptDetail : ArrayList() from collect ( ReceiptDetail( //lendo 202Y
+			fiscalCode in ("1230"),  
+			receipt.carrierCode == "00"
+		)
+	)
+	$count1230_others : Number() from accumulate (
+		DataUsageDetail( $tag : tag in ("655D","660D","665D","670D","675D"), objectType != "A",
+						 totalAmount != 0
+		),
+		count($tag)
+	)
+	$valor1230_others : Number() from accumulate (
+		DataUsageDetail( tag in ("655D","660D","665D","670D","675D"), objectType != "A",
+			$value : totalAmount
+		),
+		sum($value)
+	)
+	$count1230_650 : Number() from accumulate (
+		EventUsageDetail( $tag : tag in ("650D"), totalAmount != 0, objectType != "A"
+		),
+		count($tag)
+	)
+	$valor1230_650 : Number() from accumulate (
+		EventUsageDetail( tag in ("650D"), objectType != "A",
+			$value : totalAmount
+		),
+		sum($value)
+	)
+then
+	boolean exists_1230_202Y = false;
+	int count_1230    = $count1230_650.intValue()+ $count1230_others.intValue();
+	double valor_1230 = $valor1230_650.doubleValue() + $valor1230_others.doubleValue();
+	
+	for (ReceiptDetail receiptDetail : (ArrayList<ReceiptDetail>) $receiptDetail) {
+		String nomeOperadora = receiptDetail.getReceipt().getCarrierName(); 
+		String codOperadora  = receiptDetail.getReceipt().getCarrierCode();
+		String estado = receiptDetail.getReceipt().getCarrierState();
+		String cfop = receiptDetail.getFiscalCode();
+		String descrCFOP = receiptDetail.getCaption();
+		
+		int qtde_202Y = receiptDetail.getEventQuantity();
+		double valor_202Y = receiptDetail.getTotalAmount(); 	
+	
+	//ak considera existir cfop=1230 em 202Y, analisando seus valores	
+		if (cfop.equals("1230") && descrCFOP.equals("Utilização de Serviços de Dados")){
+			if ( qtde_202Y!=count_1230 || Math.abs(Math.round(valor_202Y*100))!=Math.abs(Math.round(valor_1230*100)) ) {	
+				results.add(R65ConsequenceSecOne(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-01-4",
+					"Divergencia nos valores dos Itens",$ciclo.toString(),nomeOperadora,codOperadora,
+					estado,$tipoConta, cfop, descrCFOP, qtde_202Y, count_1230, valor_202Y, valor_1230, "",""));
+			}
+			exists_1230_202Y = true;				
+		}
+	} 
+end
+
+//Cria map para cfop 1270
+rule "R65-INIT-1270"
+salience 90
+when	
+	RedebitDetail( 
+	  $tag : tag in ("405D","406D","407D","408D"),
+	  $carrierCode : carrierCode
+	)
+	//$control : NamedHashMap( name == "control" )
+	not (NamedDouble(name==($carrierCode+"1270"+"valor")))	
+	not (NamedDouble(name==($carrierCode+"1270"+"qtde")))
+then
+	insert(new NamedDouble($carrierCode+"1270"+"valor",0D));
+	insert(new NamedDouble($carrierCode+"1270"+"qtde",0D));			
+	//$control.put($tag, new HashMap());
+end
+
+
+//registra e soma as tags por operadora
+rule "R65-Accum-1270"
+salience 80
+when
+	RedebitDetail( 
+	  tag in ("405D","406D","407D","408D"),
+	  $carrierCode : carrierCode,
+	  $valor : totalAmount
+	)
+	nValor : (NamedDouble(name==($carrierCode+"1270"+"valor")))	
+	nQt    : (NamedDouble(name==($carrierCode+"1270"+"qtde")))	
+then
+	nValor.addTo($valor);
+	nQt.addTo(1);
+end
+
+//Validando 202Y que contem cfop=1270
+rule "R65-01-5"
+salience 0
+when
+	Account(
+		$accCarrierCode : carrierCode, //uso padrão no carrierCode da consequencia
+		$ciclo  : invoice.cycleCode,
+		$tipoConta : accountType
+	) 
+	ReceiptDetail( 
+	  $carrierCode : receipt.carrierCode,
+	  $carrierName : receipt.carrierName,
+	  $state	   : receipt.carrierState,
+	  $cfop  : fiscalCode,
+	  $qtde  : eventQuantity,
+	  $descrCFOP : caption,
+	  $valor : totalAmount
+	)
+	mapValor : (NamedDouble(name==($carrierCode+$cfop+"valor"))) 	//só entra na regra qdo cfop=1270
+	mapQtde  : (NamedDouble(name==($carrierCode+$cfop+"qtde")))
+then
+	if ( $qtde!=mapQtde.getValue() || Math.abs(Math.round($valor*100))!=Math.abs(Math.round(mapValor.getValue()*100)) ) {
+		Number mapQt  = (Number)mapQtde.getValue();	
+		Number mapVlr = (Number)mapValor.getValue();	
+			
+		results.add(R65ConsequenceSecOne(dimensionCache,consequenceBuilder,$accCarrierCode,"R65-01-5",
+			"Divergencia nos valores dos Itens",$ciclo.toString(),$carrierName.toString(),$carrierCode.toString(),
+			$state.toString(), $tipoConta, $cfop, $descrCFOP, $qtde, mapQt, $valor, mapVlr, "",""));
+	}
+end

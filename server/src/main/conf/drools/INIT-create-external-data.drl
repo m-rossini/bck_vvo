@@ -1,0 +1,73 @@
+#package br.com.auster.rules.vivo.init;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+
+import br.com.auster.common.rules.GlobalForLog;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.TelcoDimensionsFacade;
+
+import br.com.auster.vivo.billcheckout.util.DataBarnHandler;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global br.com.auster.billcheckout.param.SQLEmitter databarn;
+
+global java.util.List results; 
+
+/*
+* Inicializa o Holder de assinaturas e servicos.
+* Alem do acesso ao Data-barn propriamente dito, cria a lista com os VO's que representam cada linha
+* retornada do data-barn (Chamada para buildSubscriptionsServices) 
+* Logo apos, criar a partir do objeto Invoice() um Set com todos os numeros de acesso demonstrados na Invoice.
+*/
+rule "INIT-DATABARN-SUBS" 
+	salience 94
+	when	
+		$account : Account( $accNo: accountNumber )
+		$invoice : Invoice( 
+			$cycle : cycleCode 
+			,account == $account 
+			,$cycleEndDate : originalCycleEndDate 
+			,$cycleStartDate : originalCycleStartDate   )			
+		not( DataBarnHandler() )
+	then
+		DataBarnHandler dbarnh = new DataBarnHandler();
+#		GlobalForLog.log("DEBUG", "Databarn handler has being instantied.");
+		#Gets a Connection to DATABARN (Or Whatever databse configured as poolName=billing)
+		Connection conn=null;
+		PreparedStatement stmt=null;
+		try {
+			if (databarn == null) {
+				return;
+			}
+			conn = databarn.getConnection();
+#			GlobalForLog.log("DEBUG", "Connection got by databarn handler.");
+
+			stmt = databarn.getPreparedStatement( conn, "SUBS_SERVICES", 
+					new Object[]{$cycleEndDate, $cycleStartDate, $accNo, $cycle, $cycleEndDate, $cycleStartDate, $cycleEndDate, $cycleEndDate, $cycleStartDate} );
+			dbarnh.buildExternalSubscriptionServices( dbarnh.runSQL(stmt) );
+#			GlobalForLog.log("DEBUG", "External services list is built..");		
+		} finally {
+			#Releases the Statement
+			if (stmt != null) {
+				stmt.close();
+			}
+			#Releases the Database Connection
+			if (conn != null) {				
+				conn.close();
+			}
+		}
+		dbarnh.buildSubcriptionSetFromSource($invoice, true);	
+		insert(dbarnh);
+#		GlobalForLog.log("DEBUG", "Source(SIRS) services list is built.");		
+end 

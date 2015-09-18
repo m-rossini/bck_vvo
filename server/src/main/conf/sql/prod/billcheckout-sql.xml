@@ -1,0 +1,104 @@
+<?xml version = "1.0" encoding = "UTF-8"?>
+<root>
+	<sql:configuration xmlns:sql="http://www.auster.com.br/common/sql/">
+		
+		<sql:statements>
+
+		<sql:statement name="RequestsFinished">
+			<sql:query>
+        select b.latest_status, count(b.request_id) from proc_request b  
+				 join web_request_requests a on a.proc_request_id = b.request_id  
+				 where a.web_request_id = ? group by b.latest_status
+			</sql:query>
+			<sql:param index="1" type="Long" />										
+		</sql:statement>
+
+		<sql:statement name="TransactionFinishedSelect">
+			<sql:query>
+				select start_date, request_status, end_date, owner_id from web_request where request_id = ?
+			</sql:query>
+			<sql:param index="1" type="Long" />										
+		</sql:statement>
+
+		<sql:statement name="TransactionFinishedUpdate">
+			<sql:query>
+				update web_request set request_status = ? , end_date = ? where request_id = ?
+			</sql:query>
+			<sql:param index="1" type="Integer" />										
+			<sql:param index="2" type="Timestamp" />													
+			<sql:param index="3" type="Long" />																
+		</sql:statement>
+
+		<sql:statement name="R63_ProductRelation">
+			<sql:query>
+			select service1, service2, relation from bck_product_relation
+			</sql:query>
+		</sql:statement>
+						 		
+		<sql:statement name="R69_82_City_Holiday">
+			<sql:query>
+				SELECT a.hol_date, a.permanent_flag
+				FROM bck_holiday a
+				WHERE a.hol_state=?
+				AND a.hol_city=? 
+				AND	((a.permanent_flag='N' AND a.hol_date=to_date(?, 'yyyymmdd')) 
+				OR (a.permanent_flag='Y' AND to_char(a.hol_date, 'mmdd')=substr(?, -4)))
+			</sql:query>
+			<sql:param index="1" type="String" />
+			<sql:param index="2" type="String" />
+			<sql:param index="3" type="String" />
+			<sql:param index="4" type="String" />
+		</sql:statement>
+		
+		<sql:statement name="R69_82_State_Holiday">
+			<sql:query>
+				SELECT a.hol_date, a.permanent_flag
+				FROM bck_holiday a
+				WHERE a.hol_state=?
+				AND a.hol_city is null 
+				AND	((a.permanent_flag='N' AND a.hol_date=to_date(?, 'yyyymmdd')) 
+				OR (a.permanent_flag='Y' AND to_char(a.hol_date, 'mmdd')=substr(?, -4)))
+			</sql:query>
+			<sql:param index="1" type="String" />
+			<sql:param index="2" type="String" />
+			<sql:param index="3" type="String" />
+		</sql:statement>
+
+		<sql:statement name="R69_82_Country_Holiday">
+			<sql:query>
+				SELECT a.hol_date, a.permanent_flag
+				FROM bck_holiday a
+				WHERE a.hol_state is null
+				AND a.hol_city is null
+				AND	((a.permanent_flag='N' AND a.hol_date=to_date(?, 'yyyymmdd')) 
+				OR (a.permanent_flag='Y' AND to_char(a.hol_date, 'mmdd')=substr(?, -4)))
+			</sql:query>
+			<sql:param index="1" type="String" />
+			<sql:param index="2" type="String" />
+		</sql:statement>
+
+		<sql:statement name="R55_NegotiableProducts">
+			<sql:query>
+				select svc_price_seq_nbr
+				  from bck_negotiable_products
+			</sql:query>
+		</sql:statement>
+
+		<sql:statement name="R57_CustomerTypePlan">
+			<sql:query>
+				select svc_id, cust_type 
+					from bck_cust_type_plan
+			</sql:query>
+		</sql:statement>
+
+		<sql:statement name="R57_CustomerTypeCnpjPlan">
+			<sql:query>
+				select svc_id, plan_name 
+					from bck_cust_type_cnpj_plan
+			</sql:query>
+		</sql:statement>
+
+		</sql:statements>
+		
+	</sql:configuration>
+</root>

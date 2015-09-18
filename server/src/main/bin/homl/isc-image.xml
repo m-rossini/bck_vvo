@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<project name="auster-billcheckout" default="server.run">
+
+	<property environment="env" />
+	<property name="memory" value="1G" />
+
+	<property name="sirs.basedir" value="/opt/Billc/sirs"/>
+
+	<target name="server.run">
+
+		<path id="run.classpath">
+			<fileset dir="${basedir}/lib" includes="*" />
+			<pathelement location="${basedir}/conf" />
+		</path>
+
+		<echo message="basedir is ${basedir}"/>
+
+		<java classname="br.com.auster.vivo.billcheckout.Bootstrap"
+			fork="yes"
+			output="/opt/Billc/log/imageGenneration.out"
+			error="/opt/Billc/log/imageGenneration.err"
+			maxmemory="${memory}"
+			dir="${basedir}">
+
+			<jvmarg value="-d64" />
+			<jvmarg value="-Xms${memory}" />
+			<jvmarg value="-server" />
+
+			<sysproperty key="app.name" value="ImageBuilder" />
+			<sysproperty key="java.endorsed.dirs" value="${basedir}/lib/endorsed" />
+			<sysproperty key="java.security.policy" value="etc/security.policy" />
+			<sysproperty key="jdbc.drivers" value="org.apache.commons.dbcp.PoolingDriver:oracle.jdbc.driver.OracleDriver" />
+			<sysproperty key="user.timezone" value="GMT-3"/>
+			<sysproperty key="com.sun.management.jmxremote" value="true" />
+			<sysproperty key="javax.management.builder.initial" value="mx4j.server.MX4JMBeanServerBuilder" />
+			<sysproperty key="com.sun.management.jmxremote.authenticate" value="false" />
+			<sysproperty key="com.sun.management.jmxremote.ssl" value="false" />
+			<sysproperty key="isc.image.format" value="${processing_type}" />
+			<sysproperty key="isc.image.session" value="${session_name}" />
+			<sysproperty key="isc.image.terminal" value="${terminal_number}" />
+			
+			<arg line="-x conf/isc-image.xml" />
+			<arg line="-b default"/>
+			<!-- DWare configuration file -->
+			<arg line="-a {{sirs={{filenames=${sirs.basedir}/${input_file}}}}}" />
+			<!-- Account to be transformed -->
+			<arg line="-d ${account_number}" />
+			<arg line="-s false" />
+
+			<classpath>
+				<path refid="run.classpath" />
+			</classpath>
+		</java>
+
+	</target>
+
+</project>

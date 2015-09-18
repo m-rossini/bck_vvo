@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ROOT>
+	<xpath expression="/" assert="true">
+		<xpath expression="identities"></xpath>
+		<xpath expression="addresses"></xpath>
+		<xpath expression="invoice">
+			<xpath expression="barCode"></xpath>
+			<xpath expression="receipts">
+				<xpath expression="discounts"></xpath>
+				<xpath expression="details"></xpath>
+				<xpath expression="taxes"></xpath>
+			</xpath>
+			<xpath expression="sections">
+				<xpath expression="subSections">
+					<xpath expression="details"></xpath>
+					<xpath expression="subSections">
+						<xpath expression="details"></xpath>
+					</xpath>
+				</xpath>
+				<xpath expression="details"></xpath>
+			</xpath>
+		</xpath>
+	</xpath>
+</ROOT>

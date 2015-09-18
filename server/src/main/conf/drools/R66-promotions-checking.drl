@@ -1,0 +1,412 @@
+package br.com.auster.rules.vivo.R66;
+
+import java.util.List;
+import java.util.Iterator;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.Set;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.Invoice;
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.SectionDetail;
+import br.com.auster.om.invoice.ServiceDetail;
+import br.com.auster.om.invoice.OneTimeEventDetail
+import java.util.GregorianCalendar
+
+
+import br.com.auster.vivo.billcheckout.cache.vo.MarketingPromotionsVO;
+import br.com.auster.vivo.billcheckout.cache.vo.MarketingPromotionsCriteriaVO;
+
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+import br.com.auster.billcheckout.consequence.Consequence;
+import br.com.auster.billcheckout.consequence.ConsequenceAttributeList.AttributeType;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+
+global br.com.auster.vivo.billcheckout.cache.MarketingPromotionsServices marketingPromotionsServices;
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results; 
+
+#
+# Regra 66 – Marketing Promotions
+#
+function boolean isRightPeriod(MarketingPromotionsVO mktVOProm, Invoice inv) {
+	GregorianCalendar gC = new GregorianCalendar();  
+	gC.setTime(mktVOProm.getEnrollDate());
+	gC.add(GregorianCalendar.MONTH, (mktVOProm.getBeginCycleNbr() -1) );
+	Date beginDate = gC.getTime();
+
+	gC.setTime(mktVOProm.getEnrollDate());
+	gC.add(GregorianCalendar.MONTH, (mktVOProm.getEndCycleNbr() -1));
+	Date endDate = gC.getTime();
+
+	if ((beginDate.compareTo(inv.getCycleEndDate()) <= 0) && (endDate.compareTo(inv.getCycleStartDate()) >= 0) ) { return true; }
+	return false;
+}
+
+function boolean isOrCritValid(MarketingPromotionsVO mktVO, MarketingPromotionsCriteriaVO critVO, List servList) {
+	if (critVO.getOrSet().size() == 0 ) { return true; }
+	
+	List servCaptList = new ArrayList();
+	Iterator it1 = servList.iterator();
+	while (it1.hasNext()) {
+		ServiceDetail sd = (ServiceDetail) it1.next();
+		servCaptList.add(sd.getCaption());
+	}
+	
+	Iterator it = critVO.getOrSet().iterator();
+	while (it.hasNext()) {
+		String captionText = (String) it.next();
+		if (servCaptList.contains(captionText)) { return true; }
+	}
+
+	return false;
+}
+
+function boolean isAndCritValid(MarketingPromotionsVO mktVO, MarketingPromotionsCriteriaVO critVO, List servList) {
+	if (critVO.getAndSet().size() == 0 ) { return true; }
+	
+	List servCaptList = new ArrayList();
+	Iterator it1 = servList.iterator();
+	while (it1.hasNext()) {
+		ServiceDetail sd = (ServiceDetail) it1.next();
+		servCaptList.add(sd.getCaption());
+	}
+	
+	Iterator it = critVO.getAndSet().iterator();
+	while (it.hasNext()) {
+		String captionText = (String) it.next();
+		if (!servCaptList.contains(captionText)) { return false; }
+	}
+
+	return true;
+}
+
+function String getSetCaptText(Set critNames) {
+	String concatenatedNames = "";
+	Iterator it = critNames.iterator();
+	while (it.hasNext()) {
+		String captionText = (String) it.next();
+		if (concatenatedNames != "") {concatenatedNames += ", ";}
+		concatenatedNames += captionText;
+	}
+	return concatenatedNames;
+}
+
+function TelcoConsequence buildR66_01Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+            String code, String description, ServiceDetail serv) {
+    consequenceBuilder.setRule(code,"Concessão do período do benefício");
+	consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+	consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));
+	consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));
+	consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));
+	consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(serv.getInvoice().getAccount().getCarrierCode()));
+
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(description);
+    c.addAttribute("Terminal", serv.getSection().getAccessNbr());
+    c.addAttribute("Nome Promoção", serv.getCaption());
+ 	c.addDateTimeAttribute("Data Ativação", null, null);
+	c.addDateTimeAttribute("Data Ínicio Concessão", null, null);
+    c.addDateTimeAttribute("Data Expiração Concessão", null, null);
+    c.addLongAttribute("Total Rewards da Promoção", 0, "0");
+    c.addLongAttribute("Rewards Concedidos", 0, "0");
+    c.addAttribute("Pré Requisitos", "");
+    return c;
+    
+}
+
+function TelcoConsequence buildR66_01cConsequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+            String code, String description, OneTimeEventDetail event) {
+    consequenceBuilder.setRule(code,"Concessão do período do benefício");
+	consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+	consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));
+	consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));
+	consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));
+	consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(event.getInvoice().getAccount().getCarrierCode()));
+
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(description);
+    c.addAttribute("Terminal", "");
+    c.addAttribute("Nome Promoção", event.getCaption());
+ 	c.addDateTimeAttribute("Data Ativação", null, null);
+	c.addDateTimeAttribute("Data Ínicio Concessão", null, null);
+    c.addDateTimeAttribute("Data Expiração Concessão", null, null);
+    c.addLongAttribute("Total Rewards da Promoção", 0, "0");
+    c.addLongAttribute("Rewards Concedidos", 0, "0");
+    c.addAttribute("Pré Requisitos", "");
+    return c;
+    
+}
+
+function TelcoConsequence buildR66_02sConsequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+            String code, String description, Section sec, MarketingPromotionsVO mktVOProm, int rwdConcedidos) {
+    consequenceBuilder.setRule(code,"Concessão do período do benefício");
+	consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+	consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));
+	consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));
+	consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));
+	consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(sec.getInvoice().getAccount().getCarrierCode()));
+		
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(description);
+    c.addAttribute("Terminal", sec.getAccessNbr());
+    c.addAttribute("Nome Promoção", mktVOProm.getCapText());
+ 	c.addDateAttribute("Data Ativação", mktVOProm.getEnrollDate(), "dd/MM/yy");
+ 	GregorianCalendar gC = new GregorianCalendar();  
+	gC.setTime(mktVOProm.getEnrollDate());
+	gC.add(GregorianCalendar.MONTH, (mktVOProm.getBeginCycleNbr()-1));
+	c.addDateAttribute("Data Ínicio Concessão", gC.getTime(), "dd/MM/yy");
+    gC.setTime(mktVOProm.getEnrollDate());
+	gC.add(GregorianCalendar.MONTH, (mktVOProm.getEndCycleNbr()-1));
+    c.addDateAttribute("Data Expiração Concessão", gC.getTime(), "dd/MM/yy");
+    c.addLongAttribute("Total Rewards da Promoção", (((mktVOProm.getEndCycleNbr() - mktVOProm.getBeginCycleNbr()))+1), "0");
+    c.addLongAttribute("Rewards Concedidos", rwdConcedidos, "0");
+    c.addAttribute("Pré Requisitos", "");
+    return c;
+}
+
+function TelcoConsequence buildR66_02cConsequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+            String code, String description, String carrierCode, MarketingPromotionsVO mktVOProm, int rwdConcedidos) {
+    consequenceBuilder.setRule(code,"Concessão do período do benefício");
+	consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+	consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));
+	consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));
+	consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));
+	consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(carrierCode));
+		
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(description);
+    c.addAttribute("Terminal", "");
+    c.addAttribute("Nome Promoção", mktVOProm.getCapText());
+ 	c.addDateAttribute("Data Ativação", mktVOProm.getEnrollDate(), "dd/MM/yy");
+ 	GregorianCalendar gC = new GregorianCalendar();  
+	gC.setTime(mktVOProm.getEnrollDate());
+	gC.add(GregorianCalendar.MONTH, (mktVOProm.getBeginCycleNbr()-1));
+	c.addDateAttribute("Data Ínicio Concessão", gC.getTime(), "dd/MM/yy");
+    gC.setTime(mktVOProm.getEnrollDate());
+	gC.add(GregorianCalendar.MONTH, (mktVOProm.getEndCycleNbr()-1));
+    c.addDateAttribute("Data Expiração Concessão", gC.getTime(), "dd/MM/yy");
+    c.addLongAttribute("Total Rewards da Promoção", (((mktVOProm.getEndCycleNbr() - mktVOProm.getBeginCycleNbr()))+1), "0");
+    c.addLongAttribute("Rewards Concedidos", rwdConcedidos, "0");
+    c.addAttribute("Pré Requisitos", "");
+    return c;
+}
+
+function TelcoConsequence buildR66_04Consequence(DimensionCache dimensionCache, TelcoConsequenceBuilder consequenceBuilder, 
+            String code, String description, Section sec, MarketingPromotionsVO mktVOProm, String servNames) {
+    consequenceBuilder.setRule(code,"Concessão do período do benefício");
+	consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+	consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));
+	consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));
+	consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));
+	consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache(sec.getInvoice().getAccount().getCarrierCode()));
+
+	TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+	c.setDescription(description);
+    c.addAttribute("Terminal", sec.getAccessNbr());
+    c.addAttribute("Nome Promoção", mktVOProm.getCapText());
+ 	c.addDateTimeAttribute("Data Ativação", null, null);
+	c.addDateTimeAttribute("Data Ínicio Concessão", null, null);
+    c.addDateTimeAttribute("Data Expiração Concessão", null, null);
+    c.addLongAttribute("Total Rewards da Promoção", 0, "0");
+    c.addLongAttribute("Rewards Concedidos", 0, "0");
+    c.addAttribute("Pré Requisitos", servNames);
+    return c;
+    
+}
+
+# Carrega as promoções do DTBN
+rule "R66-INIT-01"
+	salience 50
+	when
+		$acc : Account( )
+		$inv : Invoice( )
+	then
+		// Promoções Automáticas na subscrição
+		List<MarketingPromotionsVO> lista = marketingPromotionsServices.getAccessNumberAutoPromotions("R66_AccessNumberAutoPromotions", new Object[]  {$acc.getAccountNumber(), $inv.getOriginalCycleEndDate(), $inv.getOriginalCycleStartDate()});
+		for (MarketingPromotionsVO vo : lista) {
+			marketingPromotionsServices.getPromotionDetails("R66_PromotionDetails", vo);
+			insert(vo);
+		}
+		// Promoções Manuais na subscrição
+		List<MarketingPromotionsVO> lista2 = marketingPromotionsServices.getAccessNumberPromotions("R66_AccessNumberPromotions", new Object[]  {$acc.getAccountNumber()});
+		for (MarketingPromotionsVO vo : lista2) {
+			marketingPromotionsServices.getPromotionDetails("R66_PromotionDetails", vo);
+			insert(vo);
+		}
+		// Promoções na conta
+		List<MarketingPromotionsVO> lista3 = marketingPromotionsServices.getAccountPromotions("R66_AccountPromotions", new Object[]  {$acc.getAccountNumber()});
+		for (MarketingPromotionsVO vo : lista3) {
+			marketingPromotionsServices.getPromotionDetails("R66_PromotionDetails", vo);
+			insert(vo);
+		}
+end 
+
+# Se promoção na subscrição consta no SIRS porém não no DTBN aponta crítica
+rule "R66-01s"
+	salience 40
+	when	
+		$inv : Invoice(  )
+		$promServ : ServiceDetail( tag == "340D", $cap : caption, $subId : section.subscriptionid  )
+		not ( exists ( $mktVOProm : MarketingPromotionsVO ( capText == $cap, subId == $subId, subPromFlag == true ) &&
+				       eval(isRightPeriod($mktVOProm, $inv)) )
+		)
+	then
+		results.add(buildR66_01Consequence(dimensionCache, consequenceBuilder, 
+			"R66-01s", "Promoção na subscrição presente apenas no SIRS", $promServ));
+end 
+
+# Se promoção na conta consta no SIRS porém não no DTBN aponta crítica
+rule "R66-01c"
+	salience 40
+	when
+		$inv : Invoice(  )
+		$promServ : OneTimeEventDetail( tag == "270D", $cap : caption  )
+		not ( exists ( $mktVOProm : MarketingPromotionsVO ( capText == $cap, subPromFlag == false )  && 
+			           eval(isRightPeriod($mktVOProm, $inv)) )
+		)
+	then
+		results.add(buildR66_01cConsequence(dimensionCache, consequenceBuilder, 
+			"R66-01c", "Promoção na conta presente apenas no SIRS", $promServ));
+end 
+
+# Carrega o detalhamento das rewards para cada promoção dentro do período
+rule "R66-INIT-02"
+	salience 30
+	no-loop
+	when	
+		$inv : Invoice(  )
+		$mktVOProm : MarketingPromotionsVO ( )
+		eval(isRightPeriod($mktVOProm, $inv))
+	then
+		if ($mktVOProm.isSubPromFlag()) { marketingPromotionsServices.getUsedRewardsBySubcription("R66_AccessNumberUsedRewards", $mktVOProm); }
+		if (!$mktVOProm.isSubPromFlag()){ marketingPromotionsServices.getUsedRewardsByAccount("R66_AccountUsedRewards", $mktVOProm, $inv.getAccount().getAccountNumber()); }
+		update($mktVOProm);
+end 
+
+# Está na subscrição no DTBN mas não consta no SIRS
+rule "R66-02s"
+	salience 20
+	when	
+		$section : Section( elementType  == "SUBSCRIPTION_INFO", $subId : subscriptionid )
+
+		$mktVOProm : MarketingPromotionsVO ( subId == $subId , $cap : capText, rewardsLoaded == true, subPromFlag == true )
+		not ($sec: Section(elementType  == "PROMOTIONS_TOTAL",  subscriptionid == $subId) &&
+		     ServiceDetail( tag == "340D", caption == $cap, section == $sec ))
+		
+	then
+		# Se (total rewards concedido) < (total de rewards da promoção)
+		if (($mktVOProm.getRewardsList().size()) < (($mktVOProm.getEndCycleNbr() - $mktVOProm.getBeginCycleNbr())) + 1) {
+			results.add(buildR66_02sConsequence(dimensionCache, consequenceBuilder, 
+			"R66-02s", "Promoção na subscrição não concedida totalmente", $section, $mktVOProm, $mktVOProm.getRewardsList().size()));
+		}
+end 
+
+# Está na subscrição no DTBN e no SIRS
+rule "R66-03s"
+	salience 20
+	when	
+		$mktVOProm : MarketingPromotionsVO ( $subId: subId  , $cap : capText, rewardsLoaded == true, subPromFlag == true )
+		
+		$sec : Section( elementType  == "PROMOTIONS_TOTAL", subscriptionid == $subId )
+		exists (ServiceDetail( tag == "340D", caption == $cap, section == $sec ))
+	then
+		# Se (total rewards concedido) > (total de rewards da promoção)
+		if (($mktVOProm.getRewardsList().size()) > (($mktVOProm.getEndCycleNbr() - $mktVOProm.getBeginCycleNbr())) + 1) {
+			results.add(buildR66_02sConsequence(dimensionCache, consequenceBuilder, 
+			"R66-03s", "Promoção na subscrição concedida em excesso", $sec, $mktVOProm, ($mktVOProm.getRewardsList().size())));
+		}
+end 
+
+
+
+# Está na conta no DTBN mas não consta no SIRS
+rule "R66-02c"
+	salience 20
+	when	
+		Account ($carrierCode : carrierCode );
+		
+		$mktVOProm : MarketingPromotionsVO ( $cap : capText, rewardsLoaded == true, subPromFlag == false )
+		not (	$promServ : OneTimeEventDetail( tag == "270D", caption == $cap  ))
+		
+	then
+		# Se (total rewards concedido) < (total de rewards da promoção)
+		if (($mktVOProm.getRewardsList().size()) < (($mktVOProm.getEndCycleNbr() - $mktVOProm.getBeginCycleNbr())) + 1) {
+			results.add(buildR66_02cConsequence(dimensionCache, consequenceBuilder, 
+			"R66-02c", "Promoção na conta não concedida totalmente", $carrierCode, $mktVOProm, $mktVOProm.getRewardsList().size()));
+		}
+end 
+
+# Está na conta no DTBN e no SIRS
+rule "R66-03c"
+	salience 20
+	when	
+		Account ($carrierCode : carrierCode  );
+		
+		$mktVOProm : MarketingPromotionsVO ($cap : capText, rewardsLoaded == true, subPromFlag == false )
+		exists ($promServ : OneTimeEventDetail( tag == "270D", caption == $cap ))
+	then
+		# Se (total rewards concedido) > (total de rewards da promoção)
+		if (($mktVOProm.getRewardsList().size()) > (($mktVOProm.getEndCycleNbr() - $mktVOProm.getBeginCycleNbr())) + 1) {
+			results.add(buildR66_02cConsequence(dimensionCache, consequenceBuilder, 
+			"R66-03c", "Promoção na conta concedida em excesso", $carrierCode, $mktVOProm, ($mktVOProm.getRewardsList().size())));
+		}
+end 
+
+
+# Carrega os criterios de cada promoção dentro do periodo
+rule "R66-INIT-03"
+	salience 20
+
+	when	
+		$inv : Invoice(  )
+		$mktVOProm : MarketingPromotionsVO ( )
+		eval(isRightPeriod($mktVOProm, $inv))
+	then
+		MarketingPromotionsCriteriaVO critVO = marketingPromotionsServices.getCriteria("R66_PromotionCriteria", $mktVOProm, $inv.getOriginalCycleStartDate(), $inv.getOriginalCycleEndDate());
+		insert(critVO);
+end 
+
+# Carrega os criterios de cada promoção dentro do periodo
+
+rule "R66-04"
+	salience 10
+	when	
+		$inv : Invoice(  )
+		$mktVO : MarketingPromotionsVO ($mktgId : marketingProgramId, $csaId : csaId, $subId : subId  )
+		$critVO : MarketingPromotionsCriteriaVO (marketingProgramId == $mktgId, csaId == $csaId)
+		
+		$secList : ArrayList( size > 0 )
+              from collect( Section(elementType  == "ACTIVATION_TOTAL" || == "ADDITIONAL_SERVICES_TOTAL",
+              						subscriptionid == $subId)
+                           )
+              
+
+	then
+		List servList = new ArrayList();
+		Iterator it = $secList.iterator();
+		Section dummySec = new Section();
+		while (it.hasNext()) {
+			Section sec = (Section) it.next();
+			servList.addAll(sec.getDetails());
+			dummySec = sec;
+		}
+		
+		if (!isOrCritValid($mktVO, $critVO, servList)) {
+			results.add(buildR66_04Consequence(dimensionCache, consequenceBuilder, 
+			"R66-04a", "Promoção não possui nenhum dos pré-requisitos (OR)", dummySec, $mktVO, getSetCaptText($critVO.getOrSet())));
+			
+		} else if (!isAndCritValid($mktVO, $critVO, servList)) {
+			results.add(buildR66_04Consequence(dimensionCache, consequenceBuilder, 
+			"R66-04b", "Promoção não possui todos os pré-requisitos (AND)", dummySec, $mktVO, getSetCaptText($critVO.getAndSet())));
+		}
+end 

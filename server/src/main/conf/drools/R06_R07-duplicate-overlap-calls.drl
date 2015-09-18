@@ -1,0 +1,463 @@
+package br.com.auster.rules.vivo.R07;
+
+import java.util.Iterator;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+
+
+import br.com.auster.om.invoice.Section;
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.VoiceUsageDetail;
+import br.com.auster.om.invoice.DataUsageDetail;
+import br.com.auster.om.invoice.EventUsageDetail;
+import br.com.auster.om.invoice.UsageDetail;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.vivo.billcheckout.util.ChecklistClasses;
+
+import br.com.auster.vivo.billcheckout.util.VoiceIntRangeListComparator;
+import br.com.auster.common.datastruct.IntRangeList;
+import br.com.auster.common.datastruct.IntRangeList.IntRangeNode;
+import br.com.auster.common.lang.NamedHashMap;
+import br.com.auster.common.rules.GlobalForLog;
+
+import br.com.auster.vivo.billcheckout.util.DimensionCache;
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder;
+
+import br.com.auster.common.text.DurationFormat;
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+
+
+
+/**
+ * This rule file will handle both duplicate and overlap validations. This is how it works:
+ *
+ * RULE: Regra R07-Init
+ * 1st - Will create a NamedHashMap to each subscription, so that we accumulate usage by channel id. This
+ *       map will contain on IntRangeList for each type of usage; for now, we have 4: voice, data, 1xRTT and sms.
+ *
+ * RULES: Regra R07-Adding XOXOXOXOXOXO to IntRangeList
+ * 2nd - Will get each usage, by type (as described above), and put it in the correct IntRangeList.
+ *
+ * RULES: Regra R07-Checking XOXOXOXOXOXOXO
+ * 3rd - Now that we have all usage, for each subscription, added to the correct IntRangeList, will iteract over it and validate
+ *       if there is a overlap / duplication. Important to notice that overlappings are only valid for VOICE usages; all other
+ *       types are only checked for duplicate events.
+ *
+ * NOTES:
+ * 1st - The steps defined above are sequenced by salience (70, 60, 50).
+ * 2nd - For more information about how the IntRangeList class works, please check its Javadoc.
+ * 3nd - Service plans *GESTÃO* are not validated by duplication rules; Since VOICE usages are validated for duplicate and overlaps
+ *       together, we will remove usages for such service in the LHS of the R07-Cheking VOICE.
+ */
+
+
+
+rule "Regra R07-Init"
+	salience 70
+	no-loop
+	when
+		$subList : ArrayList (size > 0)
+			from collect (Section (elementType == "SUBSCRIPTION_INFO" ))
+	then
+		// Adding in a NamedHashMap since IntRangeList has no name
+		//    and I dont want to change the class now
+		NamedHashMap map = new NamedHashMap("R07/R06-AllSubs");
+		Iterator it = $subList.iterator();
+		while (it.hasNext()) {
+			Section sec = (Section) it.next();
+			HashMap subMap = new HashMap();
+			subMap.put("voice", new IntRangeList());
+			subMap.put("data", new IntRangeList());
+			subMap.put("sms", new IntRangeList());
+			subMap.put("1xrtt", new IntRangeList());
+			map.put(sec.getChannelId(), subMap);
+		}
+		insert(map);
+end
+
+
+
+/**
+ * Adding all eligible voice calls to the IntRangeList of the selected subscription (by channelId)
+ */
+rule "Regra R07-Adding Voice to IntRangeList"
+	salience 60
+	when
+ 		$subList : NamedHashMap( name == ("R07/R06-AllSubs") )
+
+		$usage : VoiceUsageDetail ( objectType != "A",
+									caption != "ADICIONAL",
+									callClass != ChecklistClasses.CALL_CLASS_INTC, //545D cobrar, exceto locais
+									callClass != ChecklistClasses.CALL_CLASS_VC1C, //520D a cobrar locais
+									callClass != ChecklistClasses.CALL_CLASS_VC2C, //545D cobrar, exceto locais
+									callClass != ChecklistClasses.CALL_CLASS_VC3C, //545D cobrar, exceto locais
+									callClass != ChecklistClasses.CALL_CLASS_DSL1,
+									callClass != ChecklistClasses.CALL_CLASS_DSL2,
+									callClass != ChecklistClasses.CALL_CLASS_AD3,
+									callClass != ChecklistClasses.CALL_CLASS_AD1,
+									callClass != ChecklistClasses.CALL_CLASS_AD2,
+									$channelId : channelId,
+									$startTime : datetime,
+									$endTime : realEndDateTime -> ($endTime != null)
+								  )
+ 	then
+		HashMap channelMap = (HashMap) $subList.get($channelId);
+		if (channelMap!=null){
+			IntRangeList list = (IntRangeList) channelMap.get("voice");
+			int startInt = (int) ($startTime.getTime() / 1000);
+			int endInt = (int) ($endTime.getTime() / 1000);
+			list.add(startInt, endInt, $usage);
+		}
+end
+
+/**
+ * Adding all eligible 1xRTT DATA calls to the IntRangeList of the selected subscription (by channelId)
+ */
+rule "Regra R07-Adding 1xRTT Data to IntRangeList"
+	salience 60
+	when
+ 		$subList : NamedHashMap( name == ("R07/R06-AllSubs") )
+
+		$usage : DataUsageDetail ( objectType != "A",
+									svcPlan not matches ".*GESTAO.*",
+									callClass == ChecklistClasses.CALL_CLASS_1xRTT,
+									$channelId : channelId,
+									$startTime : datetime,
+									$endTime : realEndDateTime -> ($endTime != null)
+								  )
+
+ 	then
+ 		
+		HashMap channelMap = (HashMap) $subList.get($channelId);
+		if (channelMap!=null){
+			IntRangeList list = (IntRangeList) channelMap.get("1xrtt");
+			int startInt = (int) ($startTime.getTime() / 1000);
+			int endInt = (int) ($endTime.getTime() / 1000);
+			list.add(startInt, endInt, $usage);
+		}
+end
+
+/**
+ * Adding all eligible DATA (except 1xRTT) calls to the IntRangeList of the selected subscription (by channelId)
+ */
+rule "Regra R07-Adding Data except 1xRTT to IntRangeList"
+	salience 60
+	when
+ 		$subList : NamedHashMap( name == ("R07/R06-AllSubs") )
+
+		$usage : DataUsageDetail ( objectType != "A",
+									svcPlan not matches ".*GESTAO.*",
+									callClass != ChecklistClasses.CALL_CLASS_1xRTT,
+									$channelId : channelId,
+									$startTime : datetime,
+									$endTime : realEndDateTime -> ($endTime != null)
+								  )
+
+ 	then
+		HashMap channelMap = (HashMap) $subList.get($channelId);
+		if (channelMap!=null){
+			IntRangeList list = (IntRangeList) channelMap.get("data");		
+			int startInt = (int) ($startTime.getTime() / 1000);
+			int endInt = (int) ($endTime.getTime() / 1000);
+
+			list.add(startInt, endInt, $usage);
+		}
+end
+
+/**
+ * Adding all eligible SMS calls to the IntRangeList of the selected subscription (by channelId)
+ */
+rule "Regra R07-Adding SMS to IntRangeList"
+	salience 60
+	when
+ 		$subList : NamedHashMap( name == ("R07/R06-AllSubs") )
+
+		$usage : EventUsageDetail( objectType != "A",
+									svcPlan not matches ".*GESTAO.*",
+									$channelId : channelId,
+									$startTime : datetime,
+									$endTime : realEndDateTime -> ($endTime != null)
+								  )
+
+ 	then
+		HashMap channelMap = (HashMap) $subList.get($channelId);
+		if (channelMap!=null){
+			IntRangeList list = (IntRangeList) channelMap.get("sms");
+			int startInt = (int) ($startTime.getTime() / 1000);
+			int endInt = (int) ($endTime.getTime() / 1000);
+			list.add(startInt, endInt, $usage);
+		}
+end
+
+
+
+/**
+ * Now that all calls are added to the subscription's IntRangeList, we will search for
+ *   overlapped vice events
+ */
+rule "Regra R07-Checking Voice"
+	salience 50
+	when
+		$subList : NamedHashMap( name == ("R07/R06-AllSubs") )
+ 	then
+		Set<Map.Entry<String, HashMap>> channelSet = $subList.entrySet();
+		Iterator<Map.Entry<String, HashMap>> itSubs = channelSet.iterator();
+		while (itSubs.hasNext()) {
+			HashMap $channelMap = (HashMap) itSubs.next().getValue();
+					
+			// to mark if the previous call was printed as duplicated
+			boolean previousPrinted = false;
+			IntRangeNode previous = null;
+			IntRangeNode current = null;
+			IntRangeList list = (IntRangeList) $channelMap.get("voice");
+			List overlapEvents = list.getSortedOverlaps(new VoiceIntRangeListComparator());
+	
+			// if list is larger than 1 element, than we have something to check
+			if ((overlapEvents != null) && (overlapEvents.size() > 1)) {
+				Iterator it = overlapEvents.iterator();
+				current = (IntRangeNode) it.next();
+				// reading elements from overlap list
+				while (it.hasNext()) {
+					previous = current;
+					current = (IntRangeNode) it.next();
+					// now we will check if the previous and current calls have the same start/end time
+					VoiceUsageDetail previousCall = (VoiceUsageDetail) previous.getValue();
+					VoiceUsageDetail currentCall = (VoiceUsageDetail) current.getValue();
+					if ((previous.getTo() == current.getTo()) && (previous.getFrom() == current.getFrom())) {
+	
+						// removing GESTAO services (both not nulls and do not contain GESTAO text
+						if ( (previousCall.getSvcPlan() == null) ||
+						     (currentCall.getSvcPlan() == null) ||
+						     (previousCall.getSvcPlan().indexOf("GESTAO") >= 0) ||
+						     (currentCall.getSvcPlan().indexOf("GESTAO") >= 0) ) {
+							continue;
+						// removing if one of splitPart / originSID / caption / calledNumber are not equal
+						} else if ( (previousCall.getSplitPart() != currentCall.getSplitPart()) ||
+						            (! previousCall.getOriginSID().equals(currentCall.getOriginSID())) ||
+						            (! previousCall.getCaption().equals(currentCall.getCaption())) ||
+						            (! previousCall.getCalledNumber().equals(currentCall.getCalledNumber())) ) {
+							continue;
+						}
+	
+						// if all when OK, we got two duplicated events
+						if (!previousPrinted) {
+							results.add(buildR06Consequence(dimensionCache, consequenceBuilder, "R06-02", "Duplicidade tipo VOICE", previousCall));
+							previousPrinted = true;
+						}
+						results.add(buildR06Consequence(dimensionCache, consequenceBuilder, "R06-02", "Duplicidade tipo VOICE", currentCall));
+	
+					// if they are not duplicated, check if these two calls are overlapped
+					} else if (previous.getTo() > current.getFrom()) {
+						// building consequence for overlapping events
+						results.add(buildR07Consequence(dimensionCache, consequenceBuilder, previousCall, currentCall));
+						// also reset this flag here since previous was not printed as a DUPLICATE event
+						previousPrinted = false;
+					} else {
+						// if current and previous are not duplicated, mark that in the next iteraction
+						//  previous (which is the current now) can be printed
+						previousPrinted = false;
+					}
+				}
+			}
+			
+			// Now that all calls are added to the subscription's IntRangeList, we will search for
+			// overlapped sms events
+			list = (IntRangeList) $channelMap.get("sms");
+			overlapEvents = list.getSortedOverlaps();
+			// to mark if the previous call was printed as duplicated
+			previousPrinted = false;
+			previous = null;
+			current = null;
+	
+			// if list is larger than 1 element, than we have something to check
+			if ((overlapEvents != null) && (overlapEvents.size() > 1)) {
+				Iterator it = overlapEvents.iterator();
+				current = (IntRangeNode) it.next();
+				// reading elements from overlap list
+				while (it.hasNext()) {
+					previous = current;
+					current = (IntRangeNode) it.next();
+					// now we will check if the previous and current calls have the same start/end time
+					EventUsageDetail previousCall = (EventUsageDetail) previous.getValue();
+					EventUsageDetail currentCall = (EventUsageDetail) current.getValue();
+					if ((previous.getTo() == current.getTo()) && (previous.getFrom() == current.getFrom())) {
+						
+						// removing calledNumber are not equal
+						if ( ! previousCall.getCalledNumber().equals(currentCall.getCalledNumber()) ) {
+							continue;
+						}
+	
+						// if all when OK, we got two duplicated events
+						if (!previousPrinted) {
+							results.add(buildR06Consequence(dimensionCache, consequenceBuilder, "R06-03", "Duplicidade tipo SMS", previousCall));
+							previousPrinted = true;
+						}
+						results.add(buildR06Consequence(dimensionCache, consequenceBuilder, "R06-03", "Duplicidade tipo SMS", currentCall));
+					} else {
+						// if current and previous are not duplicated, mark that in the next iteraction
+						//  previous (which is the current now) can be printed
+						previousPrinted = false;
+					}
+				}
+			}
+		
+			// Now that all calls are added to the subscription's IntRangeList, we will search for
+ 			// overlapped 1xRTT data events
+			list = (IntRangeList) $channelMap.get("1xrtt");
+			overlapEvents = list.getSortedOverlaps();
+			// to mark if the previous call was printed as duplicated
+			previousPrinted = false;
+			previous = null;
+			current = null;
+	
+			// if list is larger than 1 element, than we have something to check
+			if ((overlapEvents != null) && (overlapEvents.size() > 1)) {
+				Iterator it = overlapEvents.iterator();
+				current = (IntRangeNode) it.next();
+				// reading elements from overlap list
+				while (it.hasNext()) {
+					previous = current;
+					current = (IntRangeNode) it.next();
+					// now we will check if the previous and current calls have the same start/end time
+					DataUsageDetail previousCall = (DataUsageDetail) previous.getValue();
+					DataUsageDetail currentCall = (DataUsageDetail) current.getValue();
+					if ((previous.getTo() == current.getTo()) && (previous.getFrom() == current.getFrom())) {
+						
+						// removing calledNumber are not equal
+						if ( ! previousCall.getCalledNumber().equals(currentCall.getCalledNumber()) ) {
+							continue;
+						}
+						
+						// if all when OK, we got two duplicated events
+						if (!previousPrinted) {
+							results.add(buildR06Consequence(dimensionCache, consequenceBuilder, "R06-01", "Duplicidade tipo 1XRTT", previousCall));
+							previousPrinted = true;
+						}
+						results.add(buildR06Consequence(dimensionCache, consequenceBuilder, "R06-01", "Duplicidade tipo 1XRTT", currentCall));
+					} else {
+						// if current and previous are not duplicated, mark that in the next iteraction
+						//  previous (which is the current now) can be printed
+						previousPrinted = false;
+					}
+				}
+			}
+			
+			// Now that all calls are added to the subscription's IntRangeList, we will search for
+ 			// overlapped data events (except 1xRTT)
+			list = (IntRangeList) $channelMap.get("data");
+			overlapEvents = list.getSortedOverlaps();
+			previousPrinted = false;
+			previous = null;
+			current = null;
+	
+			// if list is larger than 1 element, than we have something to check
+			if ((overlapEvents != null) && (overlapEvents.size() > 1)) {
+				Iterator it = overlapEvents.iterator();
+				current = (IntRangeNode) it.next();
+				// reading elements from overlap list
+				while (it.hasNext()) {
+					previous = current;
+					current = (IntRangeNode) it.next();
+					// now we will check if the previous and current calls have the same start/end time
+					DataUsageDetail previousCall = (DataUsageDetail) previous.getValue();
+					DataUsageDetail currentCall = (DataUsageDetail) current.getValue();
+					if ((previous.getTo() == current.getTo()) && (previous.getFrom() == current.getFrom())) {
+						
+						// removing calledNumber are not equal
+						if ( ! previousCall.getCalledNumber().equals(currentCall.getCalledNumber()) ) {
+							continue;
+						}
+						
+						// if all when OK, we got two duplicated events
+						if (!previousPrinted) {
+							results.add(buildR06Consequence(dimensionCache, consequenceBuilder, "R06-04", "Duplicidade tipo DATA", previousCall));
+							previousPrinted = true;
+						}
+						results.add(buildR06Consequence(dimensionCache, consequenceBuilder, "R06-04", "Duplicidade tipo DATA", currentCall));
+					} else {
+						// if current and previous are not duplicated, mark that in the next iteraction
+						//  previous (which is the current now) can be printed
+						previousPrinted = false;
+					}
+				}
+			}
+		}
+end
+
+function TelcoConsequence buildR07Consequence(DimensionCache _dimensionCache, TelcoConsequenceBuilder _consequenceBuilder, VoiceUsageDetail _previous, VoiceUsageDetail _current) {
+
+	_consequenceBuilder.setRule("R07-01", "Sobreposição de Chamadas");
+	_consequenceBuilder.setAccount((AccountDimension) _dimensionCache.getFromCache("account"));
+	_consequenceBuilder.setGeographics((GeographicDimension) _dimensionCache.getFromCache("geo"));
+	_consequenceBuilder.setTime((TimeDimension) _dimensionCache.getFromCache("time"));
+	_consequenceBuilder.setCycle((CycleDimension) _dimensionCache.getFromCache("cycle"));
+	_consequenceBuilder.setCarrier((CarrierDimension) _dimensionCache.getFromCache(_previous.getInvoice().getAccount().getCarrierCode()));
+
+	TelcoConsequence c = (TelcoConsequence) _consequenceBuilder.getConsequence();
+	c.setDescription("Chamadas Sobrepostas");
+	c.addAttribute("Terminal", _previous.getChannelId());
+	c.addAttribute("Ciclo", _previous.getInvoice().getCycleCode());
+	c.addAttribute("Operadora 1", _previous.getCarrierCode());
+	c.addAttribute("Operadora 2", _current.getCarrierCode());
+    c.addAttribute("Classe Chamada 1",_previous.getCallClass());
+    c.addAttribute("Classe Chamada 2",_current.getCallClass());
+    c.addAttribute("Sub Classe Chamada 1", _previous.getCallSubclass());
+    c.addAttribute("Sub Classe Chamada 2", _current.getCallSubclass());
+	c.addAttribute("Tarifa Chamada 1", _previous.getTariffClass());
+	c.addAttribute("Tarifa Chamada 2", _current.getTariffClass());
+    c.addDateTimeAttribute("Data Hora Inicio 1", _previous.getDatetime());
+    c.addDateTimeAttribute("Data Hora Inicio 2", _current.getDatetime());
+    c.addDateTimeAttribute("Data Hora Fim 1", _previous.getRealEndDateTime());
+    c.addDateTimeAttribute("Data Hora Fim 2", _current.getRealEndDateTime());
+    c.addAttribute("Duração Chamada 1", _previous.getRealDuration());
+    c.addAttribute("Duração Chamada 2", _current.getRealDuration());
+	c.addAttribute("Destino 1", ValueFormat.formatPhone(_previous.getCalledNumber()));
+	c.addAttribute("Destino 2",ValueFormat.formatPhone( _current.getCalledNumber()));
+	c.addAttribute("Valor da Chamada 1", ValueFormat.formatValue(_previous.getTotalAmount()));
+	c.addAttribute("Valor da Chamada 2", ValueFormat.formatValue(_current.getTotalAmount()));
+	return c;
+}
+
+
+function TelcoConsequence buildR06Consequence(DimensionCache _dimensionCache, TelcoConsequenceBuilder _consequenceBuilder, String _code, String _description, UsageDetail _usage) {
+
+		_consequenceBuilder.setRule(_code, "Duplicidade de Chamadas");
+		_consequenceBuilder.setAccount((AccountDimension) _dimensionCache.getFromCache("account"));
+		_consequenceBuilder.setGeographics((GeographicDimension) _dimensionCache.getFromCache("geo"));
+		_consequenceBuilder.setTime((TimeDimension) _dimensionCache.getFromCache("time"));
+		_consequenceBuilder.setCycle((CycleDimension) _dimensionCache.getFromCache("cycle"));
+		_consequenceBuilder.setCarrier((CarrierDimension) _dimensionCache.getFromCache(_usage.getInvoice().getAccount().getCarrierCode()));
+
+		TelcoConsequence c = (TelcoConsequence) _consequenceBuilder.getConsequence();
+		c.setDescription(_description);
+		c.addAttribute("Ciclo", _usage.getInvoice().getCycleCode());
+		c.addAttribute("Terminal", _usage.getChannelId());
+		c.addAttribute("Subscrição", _usage.getSection().getSubscriptionid());
+		c.addAttribute("Classe da Chamada", _usage.getCallClass());
+		c.addAttribute("Operadora da Chamada", _usage.getCarrierCode());
+		c.addAttribute("Sub Classe da Chamada", _usage.getCallSubclass());
+		c.addAttribute("Tipo de Tarifa", _usage.getTariffClass());
+        c.addDateTimeAttribute("Data Chamada", _usage.getDatetime(), "dd/MM/yy");
+        c.addAttribute("Hora Chamada", DurationFormat.formatFromDate(_usage.getDatetime()));
+        c.addAttribute("Duração Real Chamada", _usage.getRealDuration());
+		c.addAttribute("Número Origem", _usage.getChannelId());
+		c.addAttribute("Número Destino", _usage.getCalledNumber());
+		c.addAttribute("Valor Chamada", _usage.getTotalAmount());
+		return c;
+}

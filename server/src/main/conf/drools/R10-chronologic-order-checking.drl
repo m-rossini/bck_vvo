@@ -1,0 +1,64 @@
+package br.com.auster.rules.vivo.R10;
+
+import br.com.auster.om.invoice.Account;
+import br.com.auster.om.invoice.UsageDetail;
+
+import br.com.auster.billcheckout.consequence.telco.TelcoConsequence;
+import br.com.auster.billcheckout.consequence.telco.AccountDimension;
+import br.com.auster.billcheckout.consequence.telco.GeographicDimension;
+import br.com.auster.billcheckout.consequence.telco.TimeDimension;
+import br.com.auster.billcheckout.consequence.telco.CarrierDimension;
+import br.com.auster.billcheckout.consequence.telco.CycleDimension;
+
+import br.com.auster.common.text.DurationFormat;
+import br.com.auster.common.text.ValueFormat;
+
+global br.com.auster.vivo.billcheckout.util.DimensionCache dimensionCache;
+global br.com.auster.billcheckout.consequence.telco.TelcoConsequenceBuilder consequenceBuilder;
+global java.util.List results;
+
+rule "Regra R10"
+	salience 0
+	when
+		#$account : Account() 
+		$usage2 : UsageDetail(
+			$datetime2 : datetime
+		)
+		$usage1 : UsageDetail( 
+			nextUsage == $usage2,
+			this != $usage2,
+			$datetime1 : datetime			
+		)
+		eval( $datetime2 != null && $datetime2.before($datetime1) )
+ 	then
+		consequenceBuilder.setRule("R10-1", "Chamada Fora da Ordem Cronológica"); 
+		consequenceBuilder.setAccount((AccountDimension) dimensionCache.getFromCache("account"));
+		consequenceBuilder.setGeographics((GeographicDimension) dimensionCache.getFromCache("geo"));		
+		consequenceBuilder.setTime((TimeDimension) dimensionCache.getFromCache("time"));		
+		consequenceBuilder.setCycle((CycleDimension) dimensionCache.getFromCache("cycle"));				
+		consequenceBuilder.setCarrier((CarrierDimension) dimensionCache.getFromCache($usage1.getInvoice().getAccount().getCarrierCode()));
+	
+		TelcoConsequence c = (TelcoConsequence) consequenceBuilder.getConsequence();
+		c.setDescription("Chamada Fora da Ordem Cronológica");											
+		c.addAttribute("Terminal 1", $usage1.getChannelId());
+		c.addAttribute("Terminal 2", $usage2.getChannelId());
+		c.addAttribute("Operadora 1", $usage1.getCarrierCode());	
+		c.addAttribute("Operadora 2", $usage2.getCarrierCode());	
+		c.addAttribute("Estado 1", $usage1.getCarrierState());	
+		c.addAttribute("Estado 2", $usage2.getCarrierState());	
+        c.addAttribute("Classe Chamada 1",$usage1.getCallClass());
+        c.addAttribute("Classe Chamada 2",$usage2.getCallClass());
+        c.addAttribute("Sub Classe Chamada 1", $usage1.getCallSubclass());
+        c.addAttribute("Sub Classe Chamada 2", $usage2.getCallSubclass());
+		c.addAttribute("Tarifa Chamada 1", $usage1.getTariffClass());
+		c.addAttribute("Tarifa Chamada 2", $usage2.getTariffClass());
+        c.addDateAttribute("Data 1", $usage1.getDatetime(), "dd/MM/yy");
+        c.addAttribute("Hora 1", DurationFormat.formatFromDate($usage1.getDatetime()));
+        c.addDateAttribute("Data 2", $usage2.getDatetime(), "dd/MM/yy");
+        c.addAttribute("Hora 2", DurationFormat.formatFromDate($usage2.getDatetime()));
+        c.addAttribute("Duração Chamada 1", $usage1.getUsageDuration());
+        c.addAttribute("Duração Chamada 2", $usage2.getUsageDuration());
+		c.addAttribute("Destino 1", ValueFormat.formatPhone($usage1.getCalledNumber()));
+		c.addAttribute("Destino 2", ValueFormat.formatPhone($usage2.getCalledNumber()));
+		results.add(c);            
+end

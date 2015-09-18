@@ -1,0 +1,62 @@
+				<config>
+					<input-list-tag name="invoice-om" />
+					<results-map-tag name="no-results" />
+					<assertion type="usage" />
+					<rules-engine class-name="br.com.auster.billcheckout.drools.Drools4RulesEngineProcessor"
+						debug="false" dump-rete="false" output-file="log/guidingrulesout.txt">
+						<rules-file file-name="src/main/conf/drools/guiding/INIT-account-states.drl"/>												
+						<rules-file file-name="src/main/conf/drools/guiding/INIT-carrier-translation.drl"/>							
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-checking.drl"/>
+						<rules-file file-name="src/main/conf/drools/guiding/section-details.drl" encrypted="false" />						
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-510D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-520D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-535D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-540D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-545D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-550D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-555D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-560D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-570D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-575D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-580D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-585D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-590D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-595D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-600D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-650D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-655D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-660D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-665D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-670D.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-675D.drl" encrypted="false" />						
+                        <rules-file file-name="src/main/conf/drools/guiding/usg-class-680D.drl" encrypted="false" />						
+						<rules-file file-name="src/main/conf/drools/guiding/usg-class-not-qualified.drl" encrypted="false" />						
+						<rules-file file-name="src/main/conf/drools/guiding/count-objects-ent61.drl" encrypted="false" />
+						<rules-file file-name="src/main/conf/drools/guiding/count-unqualified.drl" encrypted="false" />
+						<!--rules-file file-name="src/main/conf/drools/USAGE-DUMPER.drl" encrypted="false" /-->
+					</rules-engine>
+					<globals-list>
+						<!--
+						<global name="priceEngine"
+							         class-name="br.com.auster.vivo.billcheckout.pricing.SQLPricingFacadeImpl"
+							         pool-name="sql/tiamatdb"							
+							
+                   	 	 skip-negotiables="false"
+                       cache-size="600"
+		                   notfoundset-size="50">
+	
+											 <negotiable-datasource 
+			                      pool-name="sql/tiamatdb"
+			                      price-statement="USAGE_NEGOT_PRICE"
+			                      subscription-statement="NONE"/>		
+												
+						</global>
+							-->
+						<global name="adBagReference"
+							         class-name="br.com.auster.vivo.billcheckout.util.ADQualficationFacade"
+							         config-file="" encrypted="false" data-file="src/main/conf/parm/ad1rulesByState.txt"/>
+						<global name="adBagReferenceAC"
+							         class-name="br.com.auster.vivo.billcheckout.util.ADQualficationFacade"
+							         config-file="" encrypted="false" data-file="src/main/conf/parm/ad1rulesByAreaCode.txt"/>
+					</globals-list>
+				</config>

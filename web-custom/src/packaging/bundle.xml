@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<project name="VIVO Cmdline Packaging" basedir="@[user.dir]@" default="override-jms-object">
+
+	<target name="override-jms-object">
+        <jar destfile="target/@[project.currentArtifact]@-@[project.currentVersion]@.jar"         
+			 update="true">
+			
+           <zipfileset src="@[auster:dware-console-actions]@"
+                       includes="br/com/auster/dware/console/request/queue/*.class"/>
+			
+           <zipfileset src="@[auster:minerva-interfaces]@"/>			
+			
+        </jar>
+	</target>
+
+	
+</project>
+

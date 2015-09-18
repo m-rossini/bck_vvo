@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE application PUBLIC "-//Sun Microsystems, Inc.//DTD J2EE Application 1.3//EN" "http://java.sun.com/dtd/application_1_3.dtd">
+
+<application>
+  <display-name>BillCheckout Web Portal</display-name>
+  <module>
+    <ejb>billcheckout-ejb.jar</ejb>
+  </module>
+  <module>
+    <web>
+      <web-uri>billcheckout-web.war</web-uri>
+      <context-root>/billcheckout</context-root>
+    </web>
+  </module>  
+  <module>  
+    <web>
+      <web-uri>drools-jbrms-auster-4.0.3.war</web-uri>
+      <context-root>/drools-jbrms</context-root>
+    </web>    
+  </module>
+</application>
